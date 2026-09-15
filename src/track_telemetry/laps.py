@@ -108,7 +108,11 @@ def _safe_stat(values: np.ndarray, op: str) -> float | None:
 def lap_summary(session: TelemetrySession, lap_number: int) -> dict[str, Any]:
     lap = session.lap(lap_number)
     speed = _window_values(session, lap, SPEED_KMH)
-    control_source, control_channel = select_power_control(session)
+    control_source, control_channel = select_power_control(
+        session,
+        start_s=lap.start_s,
+        end_s=lap.end_s,
+    )
     control = _window_channel_values(control_channel, lap)
     lat_g = _window_values(session, lap, LAT_G)
     long_g = _window_values(session, lap, LONG_G)
@@ -165,7 +169,11 @@ def section_metrics(
         "exit_speed_kmh": float(speed[-1]),
     }
 
-    control_source, control_channel = select_power_control(session)
+    control_source, control_channel = select_power_control(
+        session,
+        start_s=lap.start_s,
+        end_s=lap.end_s,
+    )
     result["control_source"] = control_source
     if control_source is not None and control_channel is not None:
         control = _channel_on_progress(session, lap, control_source, grid)
