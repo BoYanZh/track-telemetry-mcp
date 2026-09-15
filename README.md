@@ -16,6 +16,7 @@ The design goal is simple: **Python measures; the LLM interprets.** Raw telemetr
 - Generates a standalone interactive HTML incident player with GPS path, estimated body heading, travel direction, sideslip proxy, and event timeline.
 - Exposes the deterministic functions as MCP tools.
 - Includes a reusable analysis workflow in [`skill/SKILL.md`](skill/SKILL.md).
+- Includes task-specific coaching prompts in [`prompts/`](prompts/).
 
 ## Architecture
 
@@ -73,6 +74,11 @@ src/track_telemetry/
 
 examples/
   reference_overlay_config.example.json
+prompts/
+  session_coach.md
+  reference_comparison.md
+  incident_review.md
+  post_session_debrief.md
 skill/SKILL.md         reusable LLM workflow
 schemas/               documented MCP result shapes
 tests/                 synthetic-data tests only
@@ -305,6 +311,17 @@ standalone interactive HTML
 ```
 
 The renderer does not bake Buttonwillow-specific event times or base64 telemetry into the template.
+
+## Coaching prompts
+
+The skill defines long-lived analysis rules; the files in `prompts/` define the structure of a specific coaching task.
+
+- [`prompts/session_coach.md`](prompts/session_coach.md) — **default** general telemetry coach. Finds the highest-ROI lap-time opportunities and ends with at most three next-session changes plus success metrics and safety/abort conditions.
+- [`prompts/reference_comparison.md`](prompts/reference_comparison.md) — external reference-driver comparison, including video-derived pseudo telemetry and different-layout caution.
+- [`prompts/incident_review.md`](prompts/incident_review.md) — slide/spin/off-track causal timeline, response timing, prevention, and evidence-vs-inference separation.
+- [`prompts/post_session_debrief.md`](prompts/post_session_debrief.md) — compact end-of-session learning loop: what improved, what remained inconsistent, and the next experiments.
+
+For a normal request such as "analyze my PB and tell me what to work on next," use `session_coach.md`. Specialized prompts should replace or supplement only the relevant part of that workflow.
 
 ## Example analysis policy
 
