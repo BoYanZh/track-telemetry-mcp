@@ -4,6 +4,7 @@ import numpy as np
 
 from track_telemetry.braking import analyze_braking
 from track_telemetry.channels import (
+    ACCELERATOR_PCT,
     BRAKE_PRESSURE_KPA,
     GPS_LATITUDE_DEG,
     GPS_LONGITUDE_DEG,
@@ -14,7 +15,7 @@ from track_telemetry.channels import (
     YAW_RATE_DPS,
 )
 from track_telemetry.incidents import analyze_incident
-from track_telemetry.laps import compare_laps, section_metrics
+from track_telemetry.laps import compare_laps, lap_summary, section_metrics
 from track_telemetry.models import ChannelSeries, Lap, TelemetrySession
 
 
@@ -22,18 +23,23 @@ def _channel(name: str, t: np.ndarray, values: np.ndarray, units: str = "") -> C
     return ChannelSeries(name, units, t, values)
 
 
-def _straight_session(duration_s: float = 10.0, samples: int = 251) -> TelemetrySession:
+def _straight_session(
+    duration_s: float = 10.0,
+    samples: int = 251,
+    *,
+    power_channel: str = THROTTLE_PCT,
+) -> TelemetrySession:
     t = np.linspace(0.0, duration_s, samples)
     progress = t / duration_s
     lat = np.full_like(t, 35.0)
     lon = -119.0 + progress * 0.01
     speed = 120.0 - 50.0 * np.sin(np.pi * progress)
-    throttle = np.where(progress < 0.55, 20.0, 100.0)
+    power = np.where(progress < 0.55, 20.0, 100.0)
     channels = {
         GPS_LATITUDE_DEG: _channel(GPS_LATITUDE_DEG, t, lat, "deg"),
         GPS_LONGITUDE_DEG: _channel(GPS_LONGITUDE_DEG, t, lon, "deg"),
         SPEED_KMH: _channel(SPEED_KMH, t, speed, "km/h"),
-        THROTTLE_PCT: _channel(THROTTLE_PCT, t, throttle, "%"),
+        power_channel: _channel(power_channel, t, power, "%"),
     }
     return TelemetrySession(
         session_id=f"synthetic-{duration_s}",
@@ -64,7 +70,44 @@ def test_section_metrics_reports_entry_min_exit() -> None:
     assert result["entry_speed_kmh"] > result["min_speed_kmh"]
     assert result["exit_speed_kmh"] > result["min_speed_kmh"]
     assert 0.45 < result["min_speed_progress"] < 0.55
-    assert result["full_throttle_reapply_progress"] is not None
+    assert result["control_source"] == THROTTLE_PCT
+    assert result["full_control_reapply_progress"] is not None
+    assert result["full_throttle_reapply_progress"] == result["full_control_reapply_progress"]
+
+
+def test_accelerator_fallback_is_explicit_and_not_relabelled_as_throttle() -> None:
+    session = _straight_session(power_channel=ACCELERATOR_PCT)
+
+    lap = lap_summary(session, 1)
+    assert lap["control_source"] == ACCELERATOR_PCT
+    assert lap["full_control_fraction"] == lap["full_accelerator_fraction"]
+    assert "full_throttle_fraction" not in lap
+
+    section = section_metrics(session, 1, 0.0, 1.0)
+    assert section["control_source"] == ACCELERATOR_PCT
+    assert section["entry_control_pct"] == section["entry_accelerator_pct"]
+    assert section["exit_control_pct"] == section["exit_accelerator_pct"]
+    assert section["full_control_reapply_progress"] == section["full_accelerator_reapply_progress"]
+    assert "entry_throttle_pct" not in section
+    assert "full_throttle_reapply_progress" not in section
+
+
+def test_throttle_is_preferred_when_both_power_channels_exist() -> None:
+    session = _straight_session(power_channel=ACCELERATOR_PCT)
+    t = session.channel(ACCELERATOR_PCT).timestamps
+    throttle = np.full_like(t, 100.0)
+    session.channels[THROTTLE_PCT] = _channel(THROTTLE_PCT, t, throttle, "%")
+
+    lap = lap_summary(session, 1)
+    section = section_metrics(session, 1, 0.0, 1.0)
+
+    assert lap["control_source"] == THROTTLE_PCT
+    assert lap["full_control_fraction"] == 1.0
+    assert lap["full_throttle_fraction"] == 1.0
+    assert "full_accelerator_fraction" not in lap
+    assert section["control_source"] == THROTTLE_PCT
+    assert "entry_throttle_pct" in section
+    assert "entry_accelerator_pct" not in section
 
 
 def test_braking_separates_peak_and_sustained_decel() -> None:
@@ -96,7 +139,7 @@ def test_braking_separates_peak_and_sustained_decel() -> None:
     assert result["events"][0]["control_ramp_per_s"] > 0
 
 
-def test_incident_detects_recovery_and_snap_back() -> None:
+def _incident_session(power_channel: str = THROTTLE_PCT) -> TelemetrySession:
     t = np.arange(0.0, 10.0, 0.04)
     lat = np.full_like(t, 35.0)
     lon = -119.0 + np.linspace(0.0, 0.01, len(t))
@@ -106,12 +149,12 @@ def test_incident_detects_recovery_and_snap_back() -> None:
     yaw[(t >= 4.5) & (t < 6.5)] = -40.0
     steering = np.zeros_like(t)
     steering[(t >= 2.4) & (t < 4.2)] = -30.0
-    throttle = np.full_like(t, 100.0)
-    throttle[t >= 2.8] = 40.0
+    power = np.full_like(t, 100.0)
+    power[t >= 2.8] = 40.0
     brake = np.zeros_like(t)
     brake[t >= 4.8] = 500.0
 
-    session = TelemetrySession(
+    return TelemetrySession(
         session_id="incident",
         source="synthetic",
         channels={
@@ -120,19 +163,22 @@ def test_incident_detects_recovery_and_snap_back() -> None:
             SPEED_KMH: _channel(SPEED_KMH, t, speed, "km/h"),
             YAW_RATE_DPS: _channel(YAW_RATE_DPS, t, yaw, "deg/s"),
             STEERING_DEG: _channel(STEERING_DEG, t, steering, "deg"),
-            THROTTLE_PCT: _channel(THROTTLE_PCT, t, throttle, "%"),
+            power_channel: _channel(power_channel, t, power, "%"),
             BRAKE_PRESSURE_KPA: _channel(BRAKE_PRESSURE_KPA, t, brake, "kPa"),
         },
     )
 
+
+def test_incident_detects_recovery_and_snap_back() -> None:
     result = analyze_incident(
-        session,
+        _incident_session(),
         1.0,
         8.0,
         anchor_s=1.2,
         surface_change_s=5.0,
     )
     types = [event["type"] for event in result["timeline"]]
+    assert result["control_source"] == THROTTLE_PCT
     assert "yaw_excursion_onset" in types
     assert "opposite_steering_sign_onset" in types
     assert "initial_yaw_arrested" in types
@@ -140,3 +186,20 @@ def test_incident_detects_recovery_and_snap_back() -> None:
     assert "throttle_reduction" in types
     assert "brake_onset" in types
     assert "surface_change_user_marked" in types
+
+
+def test_incident_accelerator_fallback_remains_semantically_distinct() -> None:
+    result = analyze_incident(
+        _incident_session(ACCELERATOR_PCT),
+        1.0,
+        8.0,
+        anchor_s=1.2,
+        include_samples=True,
+    )
+    types = [event["type"] for event in result["timeline"]]
+    assert result["control_source"] == ACCELERATOR_PCT
+    assert "accelerator_reduction" in types
+    assert "throttle_reduction" not in types
+    assert "accelerator_pct" in result["samples"][0]
+    assert "throttle_pct" not in result["samples"][0]
+    assert "control_pct" in result["samples"][0]
