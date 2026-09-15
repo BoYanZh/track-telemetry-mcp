@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 
 from .channels import (
+    ACCELERATOR_PCT,
     BRAKE_PRESSURE_KPA,
     GPS_LATITUDE_DEG,
     GPS_LONGITUDE_DEG,
@@ -16,6 +17,7 @@ from .channels import (
     THROTTLE_PCT,
     YAW_RATE_DPS,
 )
+from .controls import select_power_control
 from .geometry import cumulative_distance_m, latlon_to_xy_m
 from .models import Lap, TelemetrySession
 
@@ -80,6 +82,13 @@ def _window_values(session: TelemetrySession, lap: Lap, name: str) -> np.ndarray
     return channel.values[mask]
 
 
+def _window_channel_values(channel, lap: Lap) -> np.ndarray:
+    if channel is None:
+        return np.array([], dtype=np.float64)
+    mask = (channel.timestamps >= lap.start_s) & (channel.timestamps <= lap.end_s)
+    return channel.values[mask]
+
+
 def _safe_stat(values: np.ndarray, op: str) -> float | None:
     values = np.asarray(values, dtype=np.float64)
     values = values[np.isfinite(values)]
@@ -99,7 +108,8 @@ def _safe_stat(values: np.ndarray, op: str) -> float | None:
 def lap_summary(session: TelemetrySession, lap_number: int) -> dict[str, Any]:
     lap = session.lap(lap_number)
     speed = _window_values(session, lap, SPEED_KMH)
-    throttle = _window_values(session, lap, THROTTLE_PCT)
+    control_source, control_channel = select_power_control(session)
+    control = _window_channel_values(control_channel, lap)
     lat_g = _window_values(session, lap, LAT_G)
     long_g = _window_values(session, lap, LONG_G)
     yaw = _window_values(session, lap, YAW_RATE_DPS)
@@ -114,12 +124,16 @@ def lap_summary(session: TelemetrySession, lap_number: int) -> dict[str, Any]:
         "lat_g_abs_p95": _safe_stat(lat_g, "p95_abs"),
         "long_g_min": _safe_stat(long_g, "min"),
         "yaw_rate_abs_p95_dps": _safe_stat(yaw, "p95_abs"),
+        "control_source": control_source,
     }
-    if len(throttle):
-        valid = throttle[np.isfinite(throttle)]
-        result["full_throttle_fraction"] = (
-            float(np.mean(valid >= 95.0)) if len(valid) else None
-        )
+    if len(control):
+        valid = control[np.isfinite(control)]
+        full_fraction = float(np.mean(valid >= 95.0)) if len(valid) else None
+        result["full_control_fraction"] = full_fraction
+        if control_source == THROTTLE_PCT:
+            result["full_throttle_fraction"] = full_fraction
+        elif control_source == ACCELERATOR_PCT:
+            result["full_accelerator_fraction"] = full_fraction
     return result
 
 
@@ -151,14 +165,27 @@ def section_metrics(
         "exit_speed_kmh": float(speed[-1]),
     }
 
-    if session.optional_channel(THROTTLE_PCT) is not None:
-        throttle = _channel_on_progress(session, lap, THROTTLE_PCT, grid)
-        result["entry_throttle_pct"] = float(throttle[0]) if np.isfinite(throttle[0]) else None
-        result["exit_throttle_pct"] = float(throttle[-1]) if np.isfinite(throttle[-1]) else None
-        candidates = np.flatnonzero((np.arange(len(grid)) >= min_i) & (throttle >= 90.0))
-        result["full_throttle_reapply_progress"] = (
-            float(grid[candidates[0]]) if len(candidates) else None
-        )
+    control_source, control_channel = select_power_control(session)
+    result["control_source"] = control_source
+    if control_source is not None and control_channel is not None:
+        control = _channel_on_progress(session, lap, control_source, grid)
+        entry_control = float(control[0]) if np.isfinite(control[0]) else None
+        exit_control = float(control[-1]) if np.isfinite(control[-1]) else None
+        candidates = np.flatnonzero((np.arange(len(grid)) >= min_i) & (control >= 90.0))
+        reapply_progress = float(grid[candidates[0]]) if len(candidates) else None
+
+        result["entry_control_pct"] = entry_control
+        result["exit_control_pct"] = exit_control
+        result["full_control_reapply_progress"] = reapply_progress
+
+        if control_source == THROTTLE_PCT:
+            result["entry_throttle_pct"] = entry_control
+            result["exit_throttle_pct"] = exit_control
+            result["full_throttle_reapply_progress"] = reapply_progress
+        elif control_source == ACCELERATOR_PCT:
+            result["entry_accelerator_pct"] = entry_control
+            result["exit_accelerator_pct"] = exit_control
+            result["full_accelerator_reapply_progress"] = reapply_progress
 
     if session.optional_channel(BRAKE_PRESSURE_KPA) is not None:
         brake = _channel_on_progress(session, lap, BRAKE_PRESSURE_KPA, grid)
