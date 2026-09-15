@@ -70,7 +70,14 @@ def analyze_incident(
     if len(t) < 5:
         raise ValueError("Incident window has too few valid GPS samples")
 
-    x, y = latlon_to_xy_m(lat, lon)
+    origin_lat = float(np.nanmedian(lat))
+    origin_lon = float(np.nanmedian(lon))
+    x, y = latlon_to_xy_m(
+        lat,
+        lon,
+        origin_lat_deg=origin_lat,
+        origin_lon_deg=origin_lon,
+    )
     travel = travel_heading_deg(x, y, half_window=5)
     yaw = session.channel(YAW_RATE_DPS).interp(t)
     speed = session.channel(SPEED_KMH).interp(t)
@@ -224,6 +231,10 @@ def analyze_incident(
 
     result: dict[str, Any] = {
         "window": {"start_s": start_s, "end_s": end_s, "anchor_s": float(t[anchor_i])},
+        "projection_origin": {
+            "latitude_deg": origin_lat,
+            "longitude_deg": origin_lon,
+        },
         "summary": {
             "peak_abs_yaw_rate_dps": (
                 float(abs(yaw[peak_yaw_i])) if peak_yaw_i is not None else None
