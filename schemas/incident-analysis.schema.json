@@ -3,7 +3,7 @@
   "$id": "https://github.com/BoYanZh/track-telemetry-mcp/schemas/incident-analysis.schema.json",
   "title": "Track Telemetry Incident Analysis",
   "type": "object",
-  "required": ["window", "summary", "timeline", "caveats"],
+  "required": ["window", "control_source", "summary", "timeline", "caveats"],
   "properties": {
     "window": {
       "type": "object",
@@ -13,6 +13,11 @@
         "end_s": {"type": "number"},
         "anchor_s": {"type": "number"}
       }
+    },
+    "control_source": {
+      "type": ["string", "null"],
+      "enum": ["throttle_pct", "accelerator_pct", null],
+      "description": "Power-control source used by the analysis. Accelerator pedal is never relabeled as throttle body."
     },
     "summary": {
       "type": "object",
@@ -31,7 +36,9 @@
         "required": ["type", "time_s"],
         "properties": {
           "type": {"type": "string"},
-          "time_s": {"type": "number"}
+          "time_s": {"type": "number"},
+          "control_source": {"type": ["string", "null"]},
+          "control_pct": {"type": ["number", "null"]}
         },
         "additionalProperties": true
       }
@@ -45,6 +52,14 @@
       "items": {
         "type": "object",
         "required": ["time_s", "x_m", "y_m", "body_heading_estimate_deg"],
+        "properties": {
+          "time_s": {"type": "number"},
+          "x_m": {"type": "number"},
+          "y_m": {"type": "number"},
+          "control_pct": {"type": ["number", "null"]},
+          "throttle_pct": {"type": ["number", "null"]},
+          "accelerator_pct": {"type": ["number", "null"]}
+        },
         "additionalProperties": true
       }
     }
