@@ -10,7 +10,7 @@ Determine, when the evidence supports it:
 - what changed first
 - when the driver recognized the problem
 - whether steering/yaw response temporarily stabilized the car
-- how throttle/brake changes relate in time
+- how power-control/brake changes relate in time
 - whether body-vs-travel divergence continued after yaw was reduced
 - whether a confirmed surface change altered the second half of the event
 - what the highest-ROI prevention cue is for the future
@@ -24,7 +24,8 @@ The goal is not to assign blame or prove a single root cause when the telemetry 
 - Treat sideslip as a proxy, especially at low speed.
 - Do not infer asphalt, dirt, oil, debris, or another surface from telemetry alone.
 - If video/driver observation gives a surface-change time, separate pre-change and post-change behavior.
-- A throttle lift that occurs after yaw begins is not evidence that the lift caused the initial loss.
+- Inspect `control_source`: `throttle_pct` is throttle-body position and `accelerator_pct` is accelerator-pedal position. Never rename accelerator pedal as throttle.
+- A power-control reduction that occurs after yaw begins is not evidence that the reduction caused the initial loss.
 - Distinguish initial instability, driver response, partial recovery, snap-back, and later consequences.
 - Do not judge tire breakaway characteristics from loose-surface behavior after an off-track transition.
 
@@ -34,7 +35,7 @@ Build a concise event timeline around important moments such as:
 - normal state immediately before the event
 - first meaningful yaw excursion
 - first opposite steering/countersteer
-- throttle reduction
+- power-control reduction, labeled with the actual source
 - peak lateral/yaw behavior when useful
 - initial yaw arrest / partial catch
 - confirmed surface change
@@ -66,6 +67,8 @@ State the most likely sequence in 2-4 sentences, explicitly distinguishing fact 
 | Time | Speed | Steering / yaw / pedals | Interpretation | Confidence |
 |---:|---:|---|---|---|
 
+When quoting power-control percentages, state once whether the source is throttle body or accelerator pedal.
+
 ### What caused what
 
 Use three buckets:
@@ -87,4 +90,4 @@ Only include inspection items that logically follow from the event (for example 
 
 ### Limitations
 
-State missing channels, yaw-sign uncertainty, video timing uncertainty, surface-change uncertainty, and low-speed heading limitations.
+State missing channels, control-source fallback, yaw-sign uncertainty, video timing uncertainty, surface-change uncertainty, and low-speed heading limitations.
