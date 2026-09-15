@@ -34,7 +34,7 @@
         <div class="stat"><div class="label">Yaw rate</div><div id="yaw" class="value">—</div></div>
         <div class="stat"><div class="label">Sideslip proxy</div><div id="beta" class="value">—</div></div>
         <div class="stat"><div class="label">Steering</div><div id="steer" class="value">—</div></div>
-        <div class="stat"><div class="label">Throttle</div><div id="thr" class="value">—</div></div>
+        <div class="stat"><div id="controlLabel" class="label">Power control</div><div id="control" class="value">—</div></div>
       </div>
       <div class="card" style="margin-top:10px;padding:10px"><div class="label">Nearest event</div><div id="eventNote" class="note">—</div></div>
       <div id="summary" class="muted" style="margin-top:10px"></div>
@@ -58,6 +58,8 @@ const P=__PAYLOAD_JSON__;
 document.getElementById('title').textContent=TITLE;document.title=TITLE;
 const S=P.samples||[],R=P.clean_reference_xy||[],E=P.timeline||[];
 if(!S.length)throw new Error('No incident samples in payload');
+const source=P.control_source||null;
+document.getElementById('controlLabel').textContent=source==='throttle_pct'?'Throttle body':source==='accelerator_pct'?'Accelerator pedal':'Power control';
 const ns='http://www.w3.org/2000/svg',g=document.getElementById('layer');
 const mk=(n,a={})=>{const e=document.createElementNS(ns,n);for(const[k,v]of Object.entries(a))e.setAttribute(k,v);return e};
 const xy=S.map(d=>[d.x_m,d.y_m]);const all=xy.concat(R);const xs=all.map(p=>p[0]),ys=all.map(p=>p[1]);
@@ -74,7 +76,7 @@ const slider=document.getElementById('slider');slider.max=S.length-1;
 const fmt=(v,d=1)=>v==null||!Number.isFinite(v)?'—':Number(v).toFixed(d);
 function nearestEvent(t){if(!E.length)return null;return E.reduce((a,b)=>Math.abs(b.time_s-t)<Math.abs(a.time_s-t)?b:a)}
 function arrow(x,y,deg,len){if(deg==null||!Number.isFinite(deg)){travel.setAttribute('visibility','hidden');return}travel.setAttribute('visibility','visible');const a=-deg*Math.PI/180;travel.setAttribute('x1',x);travel.setAttribute('y1',y);travel.setAttribute('x2',x+Math.cos(a)*len);travel.setAttribute('y2',y+Math.sin(a)*len)}
-function render(i){i=Math.max(0,Math.min(S.length-1,i));slider.value=i;const d=S[i],x=X(d.x_m),y=Y(d.y_m);progress.setAttribute('points',pts(xy.slice(0,i+1)));car.setAttribute('transform',`translate(${x} ${y}) rotate(${-Number(d.body_heading_estimate_deg||0)})`);arrow(x,y,d.speed_kmh!=null&&d.speed_kmh<12.9?null:d.travel_heading_deg,46);document.getElementById('time').textContent=fmt(d.time_s,3)+' s';document.getElementById('speed').textContent=d.speed_kmh==null?'—':fmt(d.speed_kmh/1.609344,1)+' mph';document.getElementById('yaw').textContent=fmt(d.yaw_rate_dps,1)+'°/s';document.getElementById('beta').textContent=fmt(d.sideslip_proxy_deg,1)+'°';document.getElementById('steer').textContent=fmt(d.steering_deg,0)+'°';document.getElementById('thr').textContent=fmt(d.throttle_pct,0)+'%';const ev=nearestEvent(d.time_s);document.getElementById('eventNote').textContent=ev?`${ev.type} @ ${Number(ev.time_s).toFixed(3)} s`:'—'}
+function render(i){i=Math.max(0,Math.min(S.length-1,i));slider.value=i;const d=S[i],x=X(d.x_m),y=Y(d.y_m);progress.setAttribute('points',pts(xy.slice(0,i+1)));car.setAttribute('transform',`translate(${x} ${y}) rotate(${-Number(d.body_heading_estimate_deg||0)})`);arrow(x,y,d.speed_kmh!=null&&d.speed_kmh<12.9?null:d.travel_heading_deg,46);document.getElementById('time').textContent=fmt(d.time_s,3)+' s';document.getElementById('speed').textContent=d.speed_kmh==null?'—':fmt(d.speed_kmh/1.609344,1)+' mph';document.getElementById('yaw').textContent=fmt(d.yaw_rate_dps,1)+'°/s';document.getElementById('beta').textContent=fmt(d.sideslip_proxy_deg,1)+'°';document.getElementById('steer').textContent=fmt(d.steering_deg,0)+'°';document.getElementById('control').textContent=fmt(d.control_pct,0)+'%';const ev=nearestEvent(d.time_s);document.getElementById('eventNote').textContent=ev?`${ev.type} @ ${Number(ev.time_s).toFixed(3)} s`:'—'}
 const eventBox=document.getElementById('events');E.forEach(ev=>{const b=document.createElement('button');b.textContent=`${Number(ev.time_s).toFixed(2)} s · ${ev.type}`;b.onclick=()=>{stop();let bi=0,bd=Infinity;S.forEach((s,i)=>{const d=Math.abs(s.time_s-ev.time_s);if(d<bd){bd=d;bi=i}});render(bi)};eventBox.appendChild(b)});
 const summary=P.summary||{};document.getElementById('summary').textContent=`Peak |yaw| ${fmt(summary.peak_abs_yaw_rate_dps,1)}°/s · max |sideslip proxy| ${fmt(summary.max_abs_sideslip_proxy_deg,1)}°`;
 const caveats=document.getElementById('caveats');(P.caveats||[]).forEach(v=>{const li=document.createElement('li');li.textContent=v;caveats.appendChild(li)});
