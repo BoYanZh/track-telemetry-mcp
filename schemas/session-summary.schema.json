@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/BoYanZh/track-telemetry-mcp/schemas/session-summary.schema.json",
+  "title": "Track Telemetry Session Summary",
+  "type": "object",
+  "required": ["session_id", "source_name", "metadata", "laps", "channels"],
+  "properties": {
+    "session_id": {"type": "string"},
+    "source_name": {"type": "string"},
+    "metadata": {"type": "object"},
+    "fastest_timed_lap": {
+      "anyOf": [
+        {"$ref": "#/$defs/lap"},
+        {"type": "null"}
+      ]
+    },
+    "laps": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/lap"}
+    },
+    "channels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["units", "samples", "sample_rate_hz", "start_s", "end_s"],
+        "properties": {
+          "units": {"type": "string"},
+          "samples": {"type": "integer", "minimum": 0},
+          "sample_rate_hz": {"type": ["number", "null"]},
+          "start_s": {"type": ["number", "null"]},
+          "end_s": {"type": ["number", "null"]}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "lap": {
+      "type": "object",
+      "required": ["number", "label", "kind", "start_s", "end_s", "duration_s", "original_number"],
+      "properties": {
+        "number": {"type": "integer"},
+        "label": {"type": "string"},
+        "kind": {"type": "string"},
+        "start_s": {"type": "number"},
+        "end_s": {"type": "number"},
+        "duration_s": {"type": "number"},
+        "original_number": {"type": ["integer", "null"]}
+      },
+      "additionalProperties": false
+    }
+  }
+}
