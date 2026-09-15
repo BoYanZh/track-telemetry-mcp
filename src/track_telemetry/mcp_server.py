@@ -27,6 +27,7 @@ from .reference_video import (
     load_overlay_config,
     write_reference_csv,
 )
+from .slip_angle import analyze_slip_angle as slip_angle_metrics
 from .visualization import write_incident_html
 
 mcp = MCPServer("track-telemetry")
@@ -144,6 +145,34 @@ def analyze_section(
 def analyze_braking(path: str, lap_number: int | None = None) -> dict[str, Any]:
     """Measure brake events, pressure ramp, and raw vs sustained longitudinal deceleration."""
     return braking_metrics(_load(path), lap_number)
+
+
+@mcp.tool()
+def analyze_slip_angle(
+    path: str,
+    start_s: float,
+    end_s: float,
+    anchor_s: float | None = None,
+    yaw_sign: float = 1.0,
+    low_speed_mph: float = 8.0,
+    include_samples: bool = False,
+    sample_stride: int = 5,
+) -> dict[str, Any]:
+    """Estimate vehicle sideslip proxy from GPS course and independent yaw rate.
+
+    This is not tire slip angle. Body heading is estimated by integrating yaw rate from
+    an anchor where sideslip is assumed near zero. GPS-derived yaw rate is rejected.
+    """
+    return slip_angle_metrics(
+        _load(path),
+        start_s,
+        end_s,
+        anchor_s=anchor_s,
+        yaw_sign=yaw_sign,
+        low_speed_mph=low_speed_mph,
+        include_samples=include_samples,
+        sample_stride=sample_stride,
+    )
 
 
 @mcp.tool()
