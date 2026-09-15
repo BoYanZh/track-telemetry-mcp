@@ -12,50 +12,70 @@ The design goal is simple: **Python measures; the LLM interprets.** Raw telemetr
 - Measures normalized-distance sections: entry speed, minimum speed, exit speed, pedal timing, and brake onset.
 - Separates raw deceleration spikes from sustained braking performance.
 - Reconstructs incidents using GPS travel direction, yaw-rate integration, steering, throttle, and braking.
+- Recovers **approximate reference telemetry** from calibrated onboard-video overlays when the reference driver has no raw log.
+- Generates a standalone interactive HTML incident player with GPS path, estimated body heading, travel direction, sideslip proxy, and event timeline.
 - Exposes the deterministic functions as MCP tools.
 - Includes a reusable analysis workflow in [`skill/SKILL.md`](skill/SKILL.md).
 
 ## Architecture
 
 ```text
-RaceChrono .rcz
-      |
-      v
-MotecLogGenerator
-      |
-      v
-TelemetrySession
-      |
-      +--> laps / sections
-      +--> braking
-      +--> incident reconstruction
-      +--> same-layout lap comparison
-      |
-      v
+                         +---------------------------+
+RaceChrono .rcz -------->| MotecLogGenerator adapter |
+                         +-------------+-------------+
+                                       |
+                                       v
+                               TelemetrySession
+                                       |
+                +----------------------+--------------------+
+                |                      |                    |
+                v                      v                    v
+          laps / sections          braking          incident reconstruction
+                |                                           |
+                |                                           +--> HTML player
+                |
+                +--> same-layout lap comparison
+
+Reference onboard video
+        |
+        v
+calibrated overlay CV extractor
+        |
+        +--> pseudo telemetry: time / map X-Y / speed / needle angle
+
+All deterministic functions
+        |
+        v
 MCPServer
-      |
-      v
+        |
+        v
 ChatGPT / Codex / OpenCode / Cursor / other MCP clients
 ```
 
-The MCP wrapper is intentionally thin. All analysis functions are ordinary Python functions and can be tested without an MCP client.
+Raw logger telemetry and video-derived pseudo telemetry are deliberately kept distinct. A video overlay is useful reference evidence, not an equal-quality substitute for the user's RCZ data.
 
 ## Project layout
 
 ```text
 src/track_telemetry/
-  channels.py        canonical field names
-  models.py          TelemetrySession / Lap / ChannelSeries
-  geometry.py        GPS projection, travel heading, yaw integration
-  motec_adapter.py   MotecLogGenerator -> TelemetrySession
-  laps.py            PB, lap/section metrics, same-layout comparison
-  braking.py         brake events and sustained deceleration
-  incidents.py       slide/spin reconstruction
-  mcp_server.py      MCP tool wrapper
+  channels.py          canonical field names
+  models.py            TelemetrySession / Lap / ChannelSeries
+  geometry.py          GPS projection, travel heading, yaw integration
+  motec_adapter.py     MotecLogGenerator -> TelemetrySession
+  laps.py              PB, lap/section metrics, same-layout comparison
+  braking.py           brake events and sustained deceleration
+  incidents.py         slide/spin reconstruction
+  reference_video.py   calibrated onboard-overlay -> pseudo telemetry
+  visualization.py     incident JSON -> standalone HTML
+  templates/
+    incident_player.html
+  mcp_server.py        MCP tool wrapper
 
-skill/SKILL.md       reusable LLM workflow
-schemas/             documented MCP result shapes
-tests/               synthetic-data tests only
+examples/
+  reference_overlay_config.example.json
+skill/SKILL.md         reusable LLM workflow
+schemas/               documented MCP result shapes
+tests/                 synthetic-data tests only
 ```
 
 ## Requirements
@@ -64,6 +84,7 @@ tests/               synthetic-data tests only
 - `numpy`
 - MCP Python SDK v2
 - optional `MotecLogGenerator` dependency for RCZ input
+- optional OpenCV dependency for reference-video overlay extraction
 
 ## Install
 
@@ -74,10 +95,10 @@ git clone https://github.com/BoYanZh/track-telemetry-mcp.git
 cd track-telemetry-mcp
 
 uv venv
-uv pip install -e ".[dev,rcz]"
+uv pip install -e ".[dev,rcz,video]"
 ```
 
-The `rcz` extra installs MotecLogGenerator directly from its GitHub repository so this project does not duplicate the RCZ decoder.
+Use only the extras you need. The `rcz` extra installs MotecLogGenerator directly from its GitHub repository so this project does not duplicate the RCZ decoder. The `video` extra installs headless OpenCV.
 
 ## Run locally over stdio
 
@@ -116,7 +137,7 @@ TRACK_TELEMETRY_ROOT=/absolute/path/to/telemetry \
 uv run track-telemetry-mcp
 ```
 
-The SDK serves the MCP endpoint over Streamable HTTP. This mode is useful behind a tunnel such as `cloudflared` during development.
+The MCP Python SDK v2 serves the endpoint over Streamable HTTP. This mode is useful behind a tunnel such as `cloudflared` during development.
 
 **Do not expose the file-backed server directly to the public internet.** A production deployment should add authentication and replace arbitrary path arguments with a storage/session abstraction.
 
@@ -173,6 +194,8 @@ Reconstructs an incident using:
 - optional user/video-marked surface-change time
 - near-backwards sliding detection
 
+Set `include_samples=true` when a downstream visualization needs the reconstructed path. `sample_stride=1` preserves native GPS samples for smooth playback.
+
 Important: GPS heading is movement direction, not body orientation. Body heading is estimated, not directly measured.
 
 ### `compare_laps(...)`
@@ -180,6 +203,108 @@ Important: GPS heading is movement direction, not body orientation. Body heading
 Compares mini-sectors by normalized GPS distance **only when** `same_layout_confirmed=true`.
 
 The guard is deliberate. Different layouts must be compared by shared physical sections aligned with GPS/onboard context, not by whole-lap percentage.
+
+### `extract_reference_overlay(...)`
+
+Recovers approximate telemetry from another driver's onboard overlay.
+
+Inputs:
+
+- local video path
+- overlay calibration JSON
+- time range
+- sampling frequency, e.g. 10 Hz
+- optional CSV output path
+
+Current automated channels:
+
+- analog speedometer needle angle
+- calibrated speed in mph
+- track-map marker X/Y in the video's overlay coordinate system
+
+The useful output schema mirrors the prototype used for the Buttonwillow reference analysis:
+
+```text
+video_t,map_x,map_y,speed_mph,needle_angle
+```
+
+Start with [`examples/reference_overlay_config.example.json`](examples/reference_overlay_config.example.json). The configuration specifies:
+
+- speedometer ROI
+- needle center
+- multiple verified angle/speed anchors
+- optional track-map ROI
+- optional HSV color range for the moving map marker
+
+This is **pseudo telemetry**. Do not claim RCZ-level precision. Brake/throttle percentages, RPM, gear, or text overlays are not automatically extracted unless a calibrated detector for that overlay is added.
+
+### `render_incident_player(...)`
+
+Writes a standalone HTML animation from real incident GPS samples.
+
+It can show:
+
+- complete incident path
+- current position
+- estimated vehicle body orientation
+- GPS travel/velocity direction
+- speed, yaw rate, steering, throttle, sideslip proxy
+- detected event markers and buttons
+- optional clean/reference lap path
+- 0.25x / 0.5x / 1x / 2x playback
+
+A clean-lap line is only a trajectory reference. It is **not** treated as a track/asphalt boundary.
+
+Example:
+
+```text
+render_incident_player(
+    path="session.rcz",
+    start_s=92.5,
+    end_s=103.5,
+    anchor_s=92.5,
+    surface_change_s=95.0,
+    sample_stride=1,
+    reference_lap_number=26,
+    output_html="spin.html"
+)
+```
+
+The player is deliberately map-source agnostic. It does not embed a non-georeferenced satellite screenshot because that creates scale/alignment errors. A future map layer should use georeferenced tiles or orthophotos.
+
+## Reference-video workflow
+
+When a reference driver publishes an onboard with a telemetry overlay but no raw log:
+
+1. Pick a representative frame and record the speedometer and track-map ROIs.
+2. Record the analog needle center in full-frame pixel coordinates.
+3. Collect at least two, preferably several, verified `(needle angle, speed)` anchors.
+4. If the track-map marker has a distinctive color, calibrate an HSV range for it.
+5. Run `extract_reference_overlay` around the reference lap at roughly 10 Hz.
+6. Check detection continuity before trusting the resulting curve.
+7. Use recovered speed/map position for approximate shared-corner alignment and speed comparison.
+8. Keep raw RCZ measurements and pseudo telemetry labeled separately in the final analysis.
+
+For different track layouts, the overlay map/onboard video can identify shared physical corners, but whole-lap normalized percentage comparison remains invalid.
+
+## Incident HTML workflow
+
+The HTML renderer generalizes the useful parts of the Buttonwillow spin prototype:
+
+```text
+analyze_incident(..., include_samples=True, sample_stride=1)
+        |
+        v
+incident JSON
+        |
+        v
+render_incident_player / write_incident_html
+        |
+        v
+standalone interactive HTML
+```
+
+The renderer does not bake Buttonwillow-specific event times or base64 telemetry into the template.
 
 ## Example analysis policy
 
@@ -208,10 +333,11 @@ Raw `.rcz`, MoTeC files, video, and personal telemetry are ignored and should no
 
 ## Current limitations / next steps
 
-- File-backed RCZ input only; no R2/GCS session store yet.
+- File-backed RCZ/video input only; no R2/GCS session store yet.
+- Reference video extraction currently covers analog speed + overlay map position, not every possible overlay widget.
 - No automatic named-corner database yet.
-- Different-layout shared-corner GPS alignment is a workflow rule but is not yet a dedicated matching algorithm.
-- No satellite-map UI yet.
+- Different-layout shared-corner GPS/video alignment is a workflow rule but is not yet a dedicated matching algorithm.
+- No georeferenced satellite/map tile UI yet.
 - Incident body heading depends on yaw-rate sign convention and a pre-slide anchor.
 
-Likely next steps are a session/object-storage abstraction, a track/corner definition format, and an optional UI for synchronized map + telemetry playback.
+Likely next steps are a session/object-storage abstraction, a track/corner definition format, richer pluggable overlay detectors, and an Apps SDK UI built on the incident-player payload.
