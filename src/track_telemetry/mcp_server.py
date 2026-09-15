@@ -14,12 +14,8 @@ from .braking import analyze_braking as braking_metrics
 from .channels import GPS_LATITUDE_DEG, GPS_LONGITUDE_DEG
 from .geometry import latlon_to_xy_m
 from .incidents import analyze_incident as incident_metrics
-from .laps import (
-    compare_laps as compare_lap_data,
-    fastest_timed_lap,
-    lap_summary,
-    section_metrics,
-)
+from .laps import compare_laps as compare_lap_data
+from .laps import fastest_timed_lap, lap_summary, section_metrics
 from .models import TelemetrySession
 from .motec_adapter import load_rcz
 from .reference_video import (
