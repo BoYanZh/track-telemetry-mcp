@@ -1,0 +1,19 @@
+{
+  "speedometer_roi": {"x": 0, "y": 0, "width": 320, "height": 240},
+  "needle_center_xy": [160, 120],
+  "angle_speed_points": [
+    [-100.0, 55.0],
+    [-50.0, 80.0],
+    [0.0, 105.0]
+  ],
+  "track_map_roi": {"x": 0, "y": 0, "width": 220, "height": 220},
+  "track_map_marker": {
+    "hsv_lower": [20, 120, 120],
+    "hsv_upper": [40, 255, 255]
+  },
+  "canny_low": 60,
+  "canny_high": 160,
+  "center_tolerance_px": 18,
+  "min_needle_length_px": 18,
+  "max_needle_length_px": 180
+}
