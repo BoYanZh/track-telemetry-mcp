@@ -12,6 +12,7 @@ The design goal is simple: **Python measures; the LLM interprets.** Raw telemetr
 - Measures normalized-distance sections: entry speed, minimum speed, exit speed, power-control timing, and brake onset.
 - Keeps throttle-body percentage and accelerator-pedal percentage semantically distinct, with explicit fallback metadata.
 - Separates raw deceleration spikes from sustained braking performance.
+- Estimates a bounded-window **vehicle sideslip/slip-angle proxy** from GPS course and independent CAN/gyro yaw rate.
 - Reconstructs incidents using GPS travel direction, yaw-rate integration, steering, power-control input, and braking.
 - Recovers **approximate reference telemetry** from calibrated onboard-video overlays when the reference driver has no raw log.
 - Generates a standalone interactive HTML incident player with GPS path, estimated body heading, travel direction, sideslip proxy, and event timeline.
@@ -29,12 +30,12 @@ RaceChrono .rcz -------->| MotecLogGenerator adapter |
                                        v
                                TelemetrySession
                                        |
-                +----------------------+--------------------+
-                |                      |                    |
-                v                      v                    v
-          laps / sections          braking          incident reconstruction
-                |                                           |
-                |                                           +--> HTML player
+                +----------------------+-----------------------+
+                |                      |                       |
+                v                      v                       v
+          laps / sections          braking             slip / incidents
+                |                                              |
+                |                                              +--> HTML player
                 |
                 +--> same-layout lap comparison
 
@@ -67,6 +68,7 @@ src/track_telemetry/
   motec_adapter.py     MotecLogGenerator -> TelemetrySession
   laps.py              PB, lap/section metrics, same-layout comparison
   braking.py           brake events and sustained deceleration
+  slip_angle.py        vehicle sideslip proxy from course vs body heading
   incidents.py         slide/spin reconstruction
   reference_video.py   calibrated onboard-overlay -> pseudo telemetry
   visualization.py     incident JSON -> standalone HTML
@@ -74,6 +76,8 @@ src/track_telemetry/
     incident_player.html
   mcp_server.py        MCP tool wrapper
 
+docs/
+  slip-angle.md        derivation, source semantics, limitations
 examples/
   reference_overlay_config.example.json
 prompts/
@@ -156,7 +160,7 @@ Some RaceChrono/CAN logs expose throttle-body position, some expose only acceler
 Selection rule:
 
 ```text
-throttle_pct available   -> use throttle_pct
+throttle_pct available    -> use throttle_pct
 otherwise accelerator_pct -> use accelerator_pct
 otherwise                 -> no power-control metric
 ```
@@ -172,6 +176,23 @@ Source-independent fields use neutral names such as:
 - `control_pct` in incident samples
 
 Source-specific aliases are emitted only when semantically correct. For example, an accelerator-only log may contain `full_accelerator_fraction`, but it will **not** contain `full_throttle_fraction`.
+
+## Slip-angle semantics
+
+RaceChrono's GPS heading/bearing is **course over ground**: direction of motion, not the direction the chassis is physically pointing. `MotecLogGenerator` also uses that GPS heading derivative as a fallback yaw-rate source when no real yaw channel exists.
+
+Therefore a useful single-GNSS sideslip estimate needs an **independent** yaw-rate source from CAN or a gyroscope. This project calculates:
+
+```text
+body_heading_est(t) = course(anchor) + integral(yaw_rate dt)
+beta_proxy(t)       = wrap(course(t) - body_heading_est(t))
+```
+
+The anchor should be a nearby stable point where sideslip is approximately zero. The result is a **vehicle sideslip proxy**, not tire slip angle. Gyro bias causes integration drift, so use bounded corner/incident windows rather than whole-session integration.
+
+If `yaw_rate_source == gps_heading_derivative`, `analyze_slip_angle` rejects the calculation by default because GPS course and yaw rate are not independent.
+
+See [`docs/slip-angle.md`](docs/slip-angle.md) for the derivation and limitations.
 
 ## MCP tools
 
@@ -216,6 +237,32 @@ Separates:
 - entry and minimum speed for individual braking events
 
 It intentionally does **not** claim ABS activation from brake pressure alone.
+
+### `analyze_slip_angle(path, start_s, end_s, ...)`
+
+Estimates vehicle sideslip over a bounded window using GPS course and independent yaw rate.
+
+Important behavior:
+
+- prefers RaceChrono GPS bearing as course; falls back to course derived from latitude/longitude;
+- integrates CAN/gyro yaw rate from a caller-selected near-zero-slip anchor;
+- masks low-speed beta where GPS course is unreliable;
+- reports source metadata and caveats;
+- rejects `yaw_rate_source=gps_heading_derivative` by default;
+- calls the result `slip_angle_proxy_deg`, not tire slip angle.
+
+Example:
+
+```text
+analyze_slip_angle(
+    path="session.rcz",
+    start_s=92.5,
+    end_s=95.0,
+    anchor_s=92.5,
+    include_samples=true,
+    sample_stride=1
+)
+```
 
 ### `analyze_incident(path, start_s, end_s, ...)`
 
@@ -370,7 +417,7 @@ The skill uses a fixed diagnostic taxonomy instead of generic advice:
 
 For high-speed sections, reference-driver pace is evidence, not a target that should automatically be copied.
 
-## Tests
+## Tests and CI
 
 Tests use synthetic telemetry only:
 
@@ -379,7 +426,9 @@ uv run pytest
 uv run ruff check .
 ```
 
-The test suite includes regression coverage for accelerator-only logs, throttle priority when both channels exist, incident control-source labeling, and the HTML player's source-aware power-control display.
+GitHub Actions runs both `ruff check .` and `pytest -q` on Python 3.10 and 3.12 for pushes and pull requests via [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
+The test suite includes regression coverage for accelerator-only logs, throttle priority when both channels exist, incident control-source labeling, HTML power-control display, slip-angle reconstruction, low-speed masking, and rejection of GPS-derived yaw for sideslip analysis.
 
 Raw `.rcz`, MoTeC files, video, and personal telemetry are ignored and should not be committed.
 
@@ -390,6 +439,6 @@ Raw `.rcz`, MoTeC files, video, and personal telemetry are ignored and should no
 - No automatic named-corner database yet.
 - Different-layout shared-corner GPS/video alignment is a workflow rule but is not yet a dedicated matching algorithm.
 - No georeferenced satellite/map tile UI yet.
-- Incident body heading depends on yaw-rate sign convention and a pre-slide anchor.
+- Sideslip/body heading depends on yaw-rate sign convention, anchor quality, and gyro/CAN bias; direct body-heading hardware would improve it.
 
 Likely next steps are a session/object-storage abstraction, a track/corner definition format, richer pluggable overlay detectors, and an Apps SDK UI built on the incident-player payload.
