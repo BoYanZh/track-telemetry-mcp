@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "track-telemetry-mcp"
+version = "0.1.0"
+description = "Deterministic motorsports telemetry analysis exposed through MCP."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "BoYanZh" }]
+dependencies = [
+  "numpy>=1.24",
+  "mcp>=2,<3",
+]
+
+[project.optional-dependencies]
+rcz = [
+  "motec-log-generator @ git+https://github.com/BoYanZh/MotecLogGenerator.git@master",
+]
+dev = [
+  "pytest>=8",
+  "ruff>=0.6",
+]
+
+[project.scripts]
+track-telemetry-mcp = "track_telemetry.mcp_server:main"
+
+[project.urls]
+Repository = "https://github.com/BoYanZh/track-telemetry-mcp"
+MotecLogGenerator = "https://github.com/BoYanZh/MotecLogGenerator"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
