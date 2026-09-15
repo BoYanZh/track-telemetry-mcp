@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/BoYanZh/track-telemetry-mcp/schemas/incident-analysis.schema.json",
+  "title": "Track Telemetry Incident Analysis",
+  "type": "object",
+  "required": ["window", "summary", "timeline", "caveats"],
+  "properties": {
+    "window": {
+      "type": "object",
+      "required": ["start_s", "end_s", "anchor_s"],
+      "properties": {
+        "start_s": {"type": "number"},
+        "end_s": {"type": "number"},
+        "anchor_s": {"type": "number"}
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["peak_abs_yaw_rate_dps", "peak_abs_yaw_time_s", "max_abs_sideslip_proxy_deg", "max_abs_sideslip_time_s"],
+      "properties": {
+        "peak_abs_yaw_rate_dps": {"type": ["number", "null"]},
+        "peak_abs_yaw_time_s": {"type": ["number", "null"]},
+        "max_abs_sideslip_proxy_deg": {"type": ["number", "null"]},
+        "max_abs_sideslip_time_s": {"type": ["number", "null"]}
+      }
+    },
+    "timeline": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "time_s"],
+        "properties": {
+          "type": {"type": "string"},
+          "time_s": {"type": "number"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "caveats": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "samples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["time_s", "x_m", "y_m", "body_heading_estimate_deg"],
+        "additionalProperties": true
+      }
+    }
+  }
+}
