@@ -25,6 +25,14 @@ Keep channel semantics explicit. In particular:
 - always inspect and preserve `control_source` in lap, section, and incident outputs;
 - never call accelerator-pedal percentage "throttle" or present it as throttle-body angle.
 
+Keep heading/slip semantics explicit:
+
+- RaceChrono GPS heading/bearing is direction of travel (course), not vehicle body heading;
+- vehicle sideslip is the angle between course and body heading;
+- `analyze_slip_angle` estimates body heading by integrating an **independent** CAN/gyro yaw-rate channel from a near-zero-slip anchor;
+- if `yaw_rate_source` is `gps_heading_derivative`, do not use it to claim sideslip because the yaw source is not independent of GPS course;
+- call the result `slip_angle_proxy` / vehicle sideslip proxy, not tire slip angle or directly measured body angle.
+
 ## Inputs
 
 At least one telemetry session or reference onboard video is required. Optional inputs include:
@@ -61,6 +69,7 @@ Check:
 - lap types and PB
 - track/layout metadata
 - whether power input is sourced from `throttle_pct` or `accelerator_pct`
+- `yaw_rate_source` before using yaw for sideslip analysis
 
 Never silently treat an interpolated, frozen, or absent channel as a measurement.
 
@@ -125,15 +134,37 @@ Do not recommend chasing a round-number target such as 1.0 g merely because it i
 
 Do not claim ABS activation unless the available channels support that inference. The current tool intentionally returns `abs_evidence: not_inferred` by default.
 
-### 7. High-speed risk handling
+### 7. Slip-angle / vehicle-sideslip analysis
+
+Use `analyze_slip_angle` when the user asks whether the car is rotating/sliding or whether body orientation is diverging from its path.
+
+The tool estimates:
+
+```text
+beta_proxy = wrap(GPS course - yaw-integrated body heading)
+```
+
+Interpret it with these constraints:
+
+- this is vehicle sideslip (`beta`) proxy, **not tire slip angle**;
+- GPS course/bearing is motion direction, not hardware/body pointing direction;
+- body heading is estimated by integrating yaw rate and must be anchored at a moment where sideslip is reasonably assumed near zero;
+- yaw rate must be independent of GPS course; reject `yaw_rate_source=gps_heading_derivative` for physical sideslip claims;
+- gyro/CAN bias accumulates during integration, so prefer bounded corner/incident windows rather than a whole lap/session;
+- mask/ignore low-speed values where GPS course is noisy;
+- use trend and timing more strongly than a single absolute beta number unless a direct body-heading sensor exists.
+
+For detailed derivation see `docs/slip-angle.md`.
+
+### 8. High-speed risk handling
 
 Do not recommend deliberately adding high-speed slide because a reference driver is faster.
 
 Treat unexpected countersteer at high speed as a warning that the current pace is near or beyond the driver's relaxed-control envelope. Prefer repeatability, asphalt margin, predictable steering, and small pace increments.
 
-Do not use lateral G alone as proof that a tire is at its limit.
+Do not use lateral G or slip-angle proxy alone as proof that a tire is at its limit.
 
-### 8. Incident / spin analysis
+### 9. Incident / spin analysis
 
 Use `analyze_incident` for a bounded time window.
 
@@ -159,13 +190,13 @@ Important interpretation rules:
 
 If the user asks for a visual replay, use `render_incident_player` with `sample_stride=1` for native-rate playback. A clean lap may be supplied as `reference_lap_number`; that line is a reference trajectory, never a claimed track boundary.
 
-### 9. Reference-driver comparison
+### 10. Reference-driver comparison
 
 Reference onboard overlay values may be approximate. Prefer calibrated speed and obvious pedal timing over uncalibrated overlay brake percentages. Never numerically equate video brake % with hydraulic kPa unless calibration is known.
 
 When the reference layout differs, use the video track-map marker/onboard visuals to identify the same physical corner, then compare only the shared section.
 
-### 10. Output format
+### 11. Output format
 
 Start with the main conclusion, then provide quantitative evidence.
 
@@ -180,4 +211,4 @@ Then provide:
 - what not to chase yet
 - one or two concrete driving cues per important section
 
-Keep recommendations tied to measured evidence. Explicitly state uncertainty where channels, layout alignment, reference data, or control-source fallback are incomplete.
+Keep recommendations tied to measured evidence. Explicitly state uncertainty where channels, layout alignment, reference data, control-source fallback, or slip-angle anchoring are incomplete.
