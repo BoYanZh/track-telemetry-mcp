@@ -37,3 +37,17 @@ def test_all_nan_throttle_does_not_block_accelerator_fallback() -> None:
     source, channel = select_power_control(session)
     assert source == ACCELERATOR_PCT
     assert channel is session.channels[ACCELERATOR_PCT]
+
+
+def test_throttle_outside_requested_window_does_not_block_accelerator() -> None:
+    session = TelemetrySession(
+        session_id="fallback-window",
+        source="synthetic",
+        channels={
+            THROTTLE_PCT: _channel(THROTTLE_PCT, [0.0, 1.0], [30.0, 80.0]),
+            ACCELERATOR_PCT: _channel(ACCELERATOR_PCT, [5.0, 6.0], [40.0, 100.0]),
+        },
+    )
+    source, channel = select_power_control(session, start_s=5.0, end_s=6.0)
+    assert source == ACCELERATOR_PCT
+    assert channel is session.channels[ACCELERATOR_PCT]
