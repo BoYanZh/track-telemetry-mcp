@@ -18,6 +18,9 @@ dependencies = [
 rcz = [
   "motec-log-generator @ git+https://github.com/BoYanZh/MotecLogGenerator.git@master",
 ]
+video = [
+  "opencv-python-headless>=4.10",
+]
 dev = [
   "pytest>=8",
   "ruff>=0.6",
@@ -32,9 +35,13 @@ MotecLogGenerator = "https://github.com/BoYanZh/MotecLogGenerator"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+track_telemetry = ["templates/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
