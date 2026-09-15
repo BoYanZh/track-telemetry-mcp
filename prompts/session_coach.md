@@ -12,6 +12,7 @@ Follow `skill/SKILL.md`. Use deterministic telemetry tools for measurement; use 
    - Identify clean timed laps, PB, representative consistent laps, cooldown/out laps, traffic-affected laps, and incident laps when evidence supports those labels.
    - Check available channels and sample rates before relying on a metric.
    - Never silently treat a missing, frozen, sparse, or interpolated channel as a measurement.
+   - For power input, inspect `control_source`. `throttle_pct` means throttle-body position; `accelerator_pct` means accelerator-pedal position. Never rename one as the other.
 
 2. Establish the baseline.
    - Use the driver's own PB and nearby consistent laps first.
@@ -26,7 +27,7 @@ For every important corner or section, evaluate separately:
 - braking duration and useful sustained deceleration
 - brake release timing when inferable
 - minimum speed
-- throttle reapplication
+- power-control reapplication, labeled using the actual `control_source`
 - exit speed
 - steering/yaw behavior
 - line or placement evidence
@@ -41,12 +42,14 @@ Classify the primary issue using one of these labels when possible:
 - weak braking
 - excessive overslow
 - late brake release
-- late throttle
+- late power reapplication
 - weak exit
 - line / placement
 - inconsistent execution
 - already good / low ROI
 - insufficient evidence
+
+When describing power input in prose, say "throttle" only when `control_source == throttle_pct`; say "accelerator pedal" when `control_source == accelerator_pct`.
 
 4. Quantify the opportunity.
 
@@ -109,7 +112,7 @@ Then provide:
 | Section | Current | Reference/baseline | Estimated loss | Primary diagnosis | Confidence | Risk/ROI |
 |---|---:|---:|---:|---|---|---|
 
-Use entry/minimum/exit values where useful rather than one single speed number.
+Use entry/minimum/exit values where useful rather than one single speed number. When quoting power-input percentages or reapplication timing, include the actual control source at least once in the section.
 
 Then:
 
@@ -133,7 +136,7 @@ Then:
 
 ### Confidence and limitations
 
-State any missing channels, traffic contamination, layout mismatch, approximate reference-video data, uncertain alignment, or other evidence gaps.
+State any missing channels, traffic contamination, layout mismatch, approximate reference-video data, uncertain alignment, control-source fallback, or other evidence gaps.
 
 ## Coaching style
 
