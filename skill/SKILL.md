@@ -29,6 +29,17 @@ At least one telemetry session or reference onboard video is required. Optional 
 - driver concern or target corner
 - user/video-marked incident events such as a surface change
 
+## Task prompt selection
+
+Use the reusable task prompts in `prompts/` rather than inventing a new analysis structure each time:
+
+- `prompts/session_coach.md` — default for general session/lap-time coaching and next-session recommendations.
+- `prompts/reference_comparison.md` — when comparing the driver to an external reference driver or video-derived pseudo telemetry.
+- `prompts/incident_review.md` — for a slide, spin, off-track, snap-back, or other loss-of-control review.
+- `prompts/post_session_debrief.md` — for a compact end-of-day learning summary and next-session experiment plan.
+
+When a request spans multiple tasks, use `session_coach.md` as the primary structure and borrow the specialized prompt rules only for the relevant sections.
+
 ## Workflow
 
 ### 1. Inspect raw telemetry before interpreting
