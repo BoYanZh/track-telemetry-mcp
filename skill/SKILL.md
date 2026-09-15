@@ -5,18 +5,25 @@ description: Quantitative, risk-aware HPDE and track telemetry analysis using de
 
 # Track Telemetry Analysis
 
-Use this skill when the user asks to analyze motorsports telemetry, compare laps, diagnose corner speed, evaluate braking, or reconstruct a slide/spin/off-track incident.
+Use this skill when the user asks to analyze motorsports telemetry, compare laps, diagnose corner speed, evaluate braking, reconstruct a slide/spin/off-track incident, or recover approximate reference telemetry from an onboard video overlay.
 
 ## Core principle
 
 Use deterministic code for measurement and the LLM for interpretation. Do not estimate values that the telemetry tools can calculate.
 
+Keep source quality explicit:
+
+1. raw logger telemetry such as RaceChrono RCZ is the primary quantitative source;
+2. calibrated values recovered from a video overlay are pseudo telemetry and approximate;
+3. manual visual observations are context, not sensor measurements.
+
 ## Inputs
 
-At least one telemetry session is required. Optional inputs include:
+At least one telemetry session or reference onboard video is required. Optional inputs include:
 
 - reference lap/session
 - onboard video
+- overlay calibration JSON
 - track/layout name
 - tire and vehicle setup
 - driver concern or target corner
@@ -24,9 +31,9 @@ At least one telemetry session is required. Optional inputs include:
 
 ## Workflow
 
-### 1. Inspect before interpreting
+### 1. Inspect raw telemetry before interpreting
 
-Call `inspect_session` and `list_laps` first.
+For RCZ/session analysis call `inspect_session` and `list_laps` first.
 
 Check:
 
@@ -37,14 +44,31 @@ Check:
 
 Never silently treat an interpolated, frozen, or absent channel as a measurement.
 
-### 2. Establish layout compatibility
+### 2. Recover reference-video telemetry when raw data is unavailable
+
+If a reference driver has only an onboard video with telemetry overlays, use `extract_reference_overlay` after creating a calibration config for that overlay.
+
+The current extractor can recover:
+
+- analog speedometer needle angle -> calibrated speed
+- track-map marker X/Y -> approximate position on the video's own map graphic
+
+Use multiple manually verified angle/speed anchors. Keep missing detections as missing; do not silently interpolate them into measurements.
+
+Treat the result as **pseudo telemetry**. It is suitable for approximate corner speed and spatial alignment, not as an equal-quality substitute for the user's raw RCZ data.
+
+Overlay brake/throttle percentages, RPM, gear, or digital text may still require separate extraction or manual frame reads unless a calibrated detector exists. Never invent channels that were not extracted.
+
+### 3. Establish layout compatibility
 
 Before lap-to-lap normalized-distance comparison, verify that both laps use the same physical layout.
 
 - Same layout: `compare_laps(..., same_layout_confirmed=true)` is allowed.
 - Different layouts: do not compare whole-lap percentages. Align only shared physical sections using GPS/onboard context and analyze those sections separately.
 
-### 3. Diagnose sections with a fixed taxonomy
+A video overlay track-map position is useful for shared-corner alignment, but its pixel coordinates are not geographic GPS coordinates.
+
+### 4. Diagnose sections with a fixed taxonomy
 
 For each relevant corner or section, distinguish the primary issue:
 
@@ -58,11 +82,11 @@ For each relevant corner or section, distinguish the primary issue:
 
 Do not collapse these into generic advice such as "carry more speed."
 
-### 4. Report entry, minimum, and exit
+### 5. Report entry, minimum, and exit
 
 Use `analyze_section` or equivalent deterministic metrics. Minimum speed alone is not sufficient. Exit speed and throttle timing often dominate the next straight.
 
-### 5. Braking analysis
+### 6. Braking analysis
 
 Use `analyze_braking` and separate:
 
@@ -77,7 +101,7 @@ Do not recommend chasing a round-number target such as 1.0 g merely because it i
 
 Do not claim ABS activation unless the available channels support that inference. The current tool intentionally returns `abs_evidence: not_inferred` by default.
 
-### 6. High-speed risk handling
+### 7. High-speed risk handling
 
 Do not recommend deliberately adding high-speed slide because a reference driver is faster.
 
@@ -85,7 +109,7 @@ Treat unexpected countersteer at high speed as a warning that the current pace i
 
 Do not use lateral G alone as proof that a tire is at its limit.
 
-### 7. Incident / spin analysis
+### 8. Incident / spin analysis
 
 Use `analyze_incident` for a bounded time window.
 
@@ -108,11 +132,15 @@ Important interpretation rules:
 - Never infer asphalt vs dirt from telemetry alone. Only mark a surface change when supported by video, observation, or another source.
 - Separate vehicle behavior before and after a confirmed surface change.
 
-### 8. Reference-driver comparison
+If the user asks for a visual replay, use `render_incident_player` with `sample_stride=1` for native-rate playback. A clean lap may be supplied as `reference_lap_number`; that line is a reference trajectory, never a claimed track boundary.
 
-Reference onboard overlay values may be approximate. Prefer speed and obvious pedal timing over uncalibrated overlay brake percentages. Never numerically equate video brake % with hydraulic kPa unless calibration is known.
+### 9. Reference-driver comparison
 
-### 9. Output format
+Reference onboard overlay values may be approximate. Prefer calibrated speed and obvious pedal timing over uncalibrated overlay brake percentages. Never numerically equate video brake % with hydraulic kPa unless calibration is known.
+
+When the reference layout differs, use the video track-map marker/onboard visuals to identify the same physical corner, then compare only the shared section.
+
+### 10. Output format
 
 Start with the main conclusion, then provide quantitative evidence.
 
