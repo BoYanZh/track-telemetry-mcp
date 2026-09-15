@@ -17,6 +17,14 @@ Keep source quality explicit:
 2. calibrated values recovered from a video overlay are pseudo telemetry and approximate;
 3. manual visual observations are context, not sensor measurements.
 
+Keep channel semantics explicit. In particular:
+
+- `throttle_pct` means throttle-body position when that source exposes it;
+- `accelerator_pct` means accelerator-pedal position;
+- analysis tools prefer `throttle_pct` and fall back to `accelerator_pct` only when throttle is absent;
+- always inspect and preserve `control_source` in lap, section, and incident outputs;
+- never call accelerator-pedal percentage "throttle" or present it as throttle-body angle.
+
 ## Inputs
 
 At least one telemetry session or reference onboard video is required. Optional inputs include:
@@ -52,6 +60,7 @@ Check:
 - whether channels are missing, frozen, sparse, or obviously invalid
 - lap types and PB
 - track/layout metadata
+- whether power input is sourced from `throttle_pct` or `accelerator_pct`
 
 Never silently treat an interpolated, frozen, or absent channel as a measurement.
 
@@ -86,16 +95,20 @@ For each relevant corner or section, distinguish the primary issue:
 1. conservative entry / braking too early
 2. excessive minimum-speed loss / overslow
 3. long or weak braking instead of shorter useful braking
-4. throttle reapplied too late
+4. power control reapplied too late
 5. weak exit speed
 6. line / placement / geometry problem
 7. already good enough; further gain has poor risk/reward
 
 Do not collapse these into generic advice such as "carry more speed."
 
+When discussing item 4, use the actual `control_source`: say "throttle reapplication" only for `throttle_pct`; say "accelerator-pedal reapplication" for `accelerator_pct`.
+
 ### 5. Report entry, minimum, and exit
 
-Use `analyze_section` or equivalent deterministic metrics. Minimum speed alone is not sufficient. Exit speed and throttle timing often dominate the next straight.
+Use `analyze_section` or equivalent deterministic metrics. Minimum speed alone is not sufficient. Exit speed and power-control timing often dominate the next straight.
+
+Use the neutral fields `entry_control_pct`, `exit_control_pct`, and `full_control_reapply_progress` for source-independent analysis. Source-specific aliases may also be present, but they must not be used to blur throttle-body and accelerator-pedal semantics.
 
 ### 6. Braking analysis
 
@@ -128,7 +141,7 @@ Reconstruct and distinguish, when supported:
 
 - initial yaw excursion
 - opposite steering input
-- throttle reduction
+- power-control reduction, labeled as throttle-body or accelerator-pedal input according to `control_source`
 - initial yaw arrest / partial recovery
 - snap-back
 - brake onset
@@ -142,6 +155,7 @@ Important interpretation rules:
 - Sideslip proxy is unreliable at low speed.
 - Never infer asphalt vs dirt from telemetry alone. Only mark a surface change when supported by video, observation, or another source.
 - Separate vehicle behavior before and after a confirmed surface change.
+- `control_pct` is the source-independent power-control value; use `control_source` to determine whether it is throttle-body or accelerator-pedal percentage.
 
 If the user asks for a visual replay, use `render_incident_player` with `sample_stride=1` for native-rate playback. A clean lap may be supplied as `reference_lap_number`; that line is a reference trajectory, never a claimed track boundary.
 
@@ -166,4 +180,4 @@ Then provide:
 - what not to chase yet
 - one or two concrete driving cues per important section
 
-Keep recommendations tied to measured evidence. Explicitly state uncertainty where channels, layout alignment, or reference data are incomplete.
+Keep recommendations tied to measured evidence. Explicitly state uncertainty where channels, layout alignment, reference data, or control-source fallback are incomplete.
