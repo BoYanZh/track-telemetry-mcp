@@ -9,9 +9,10 @@ The design goal is simple: **Python measures; the LLM interprets.** Raw telemetr
 - Reuses [`BoYanZh/MotecLogGenerator`](https://github.com/BoYanZh/MotecLogGenerator) for RaceChrono `.rcz` decoding.
 - Normalizes useful channels into a small `TelemetrySession` model.
 - Finds lap/PB metadata and calculates lap summaries.
-- Measures normalized-distance sections: entry speed, minimum speed, exit speed, pedal timing, and brake onset.
+- Measures normalized-distance sections: entry speed, minimum speed, exit speed, power-control timing, and brake onset.
+- Keeps throttle-body percentage and accelerator-pedal percentage semantically distinct, with explicit fallback metadata.
 - Separates raw deceleration spikes from sustained braking performance.
-- Reconstructs incidents using GPS travel direction, yaw-rate integration, steering, throttle, and braking.
+- Reconstructs incidents using GPS travel direction, yaw-rate integration, steering, power-control input, and braking.
 - Recovers **approximate reference telemetry** from calibrated onboard-video overlays when the reference driver has no raw log.
 - Generates a standalone interactive HTML incident player with GPS path, estimated body heading, travel direction, sideslip proxy, and event timeline.
 - Exposes the deterministic functions as MCP tools.
@@ -60,6 +61,7 @@ Raw logger telemetry and video-derived pseudo telemetry are deliberately kept di
 ```text
 src/track_telemetry/
   channels.py          canonical field names
+  controls.py          throttle-body / accelerator-pedal selection semantics
   models.py            TelemetrySession / Lap / ChannelSeries
   geometry.py          GPS projection, travel heading, yaw integration
   motec_adapter.py     MotecLogGenerator -> TelemetrySession
@@ -147,6 +149,30 @@ The MCP Python SDK v2 serves the endpoint over Streamable HTTP. This mode is use
 
 **Do not expose the file-backed server directly to the public internet.** A production deployment should add authentication and replace arbitrary path arguments with a storage/session abstraction.
 
+## Power-control semantics
+
+Some RaceChrono/CAN logs expose throttle-body position, some expose only accelerator-pedal position, and some expose both. The project intentionally keeps those meanings separate.
+
+Selection rule:
+
+```text
+throttle_pct available   -> use throttle_pct
+otherwise accelerator_pct -> use accelerator_pct
+otherwise                 -> no power-control metric
+```
+
+Every source-independent lap/section/incident result reports `control_source` as either `throttle_pct`, `accelerator_pct`, or `null`.
+
+Source-independent fields use neutral names such as:
+
+- `full_control_fraction`
+- `entry_control_pct`
+- `exit_control_pct`
+- `full_control_reapply_progress`
+- `control_pct` in incident samples
+
+Source-specific aliases are emitted only when semantically correct. For example, an accelerator-only log may contain `full_accelerator_fraction`, but it will **not** contain `full_throttle_fraction`.
+
 ## MCP tools
 
 ### `inspect_session(path)`
@@ -159,7 +185,9 @@ Returns a compact lap table and PB lap number.
 
 ### `analyze_lap(path, lap_number)`
 
-Returns lap-level speed statistics, lateral-G 95th percentile, longitudinal-G minimum, yaw-rate 95th percentile, and full-throttle fraction when available.
+Returns lap-level speed statistics, lateral-G 95th percentile, longitudinal-G minimum, yaw-rate 95th percentile, and source-aware full power-control fraction when available.
+
+The output includes `control_source`. `throttle_pct` is preferred; `accelerator_pct` is used only as an explicitly labeled fallback.
 
 ### `analyze_section(path, lap_number, start_progress, end_progress)`
 
@@ -168,10 +196,13 @@ Measures a section addressed by normalized GPS distance `[0, 1]`:
 - entry speed
 - minimum speed and position
 - exit speed
-- throttle at entry/exit
-- first full-throttle reapplication after minimum speed
+- entry/exit power-control percentage
+- first >=90% power-control reapplication after minimum speed
+- `control_source`
 - brake onset
 - peak brake pressure
+
+Do not interpret accelerator-pedal percentage as throttle-body angle.
 
 ### `analyze_braking(path, lap_number=None)`
 
@@ -194,11 +225,13 @@ Reconstructs an incident using:
 - yaw-rate-integrated body-heading estimate
 - sideslip proxy
 - steering sign change
-- throttle reduction
+- source-aware power-control reduction
 - brake onset
 - snap-back detection
 - optional user/video-marked surface-change time
 - near-backwards sliding detection
+
+Incident output includes `control_source`; sample rows use neutral `control_pct` plus a source-specific field only when appropriate. The HTML player labels the value as throttle body or accelerator pedal accordingly.
 
 Set `include_samples=true` when a downstream visualization needs the reconstructed path. `sample_stride=1` preserves native GPS samples for smooth playback.
 
@@ -254,7 +287,7 @@ It can show:
 - current position
 - estimated vehicle body orientation
 - GPS travel/velocity direction
-- speed, yaw rate, steering, throttle, sideslip proxy
+- speed, yaw rate, steering, source-aware power control, sideslip proxy
 - detected event markers and buttons
 - optional clean/reference lap path
 - 0.25x / 0.5x / 1x / 2x playback
@@ -330,7 +363,7 @@ The skill uses a fixed diagnostic taxonomy instead of generic advice:
 1. conservative entry / braking too early
 2. excessive minimum-speed loss / overslow
 3. long or weak braking
-4. throttle reapplied too late
+4. power control reapplied too late
 5. weak exit speed
 6. line / placement problem
 7. already good enough / poor risk-reward to chase
@@ -345,6 +378,8 @@ Tests use synthetic telemetry only:
 uv run pytest
 uv run ruff check .
 ```
+
+The test suite includes regression coverage for accelerator-only logs, throttle priority when both channels exist, incident control-source labeling, and the HTML player's source-aware power-control display.
 
 Raw `.rcz`, MoTeC files, video, and personal telemetry are ignored and should not be committed.
 
