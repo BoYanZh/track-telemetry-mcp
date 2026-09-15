@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 
 from .channels import (
+    ACCELERATOR_PCT,
     BRAKE_POS_PCT,
     BRAKE_PRESSURE_KPA,
     GPS_LATITUDE_DEG,
@@ -16,6 +17,7 @@ from .channels import (
     THROTTLE_PCT,
     YAW_RATE_DPS,
 )
+from .controls import select_power_control
 from .geometry import (
     integrate_body_heading_deg,
     latlon_to_xy_m,
@@ -55,6 +57,9 @@ def analyze_incident(
     direction before the slide. It is therefore a trend tool, not a direct body-heading
     measurement. ``surface_change_s`` is only a user/video-supplied marker; this function
     does not infer asphalt vs dirt from telemetry alone.
+
+    Power-control semantics are explicit: throttle-body percentage is preferred when
+    available; accelerator-pedal percentage is used only as a labeled fallback.
     """
     if end_s <= start_s:
         raise ValueError("end_s must be greater than start_s")
@@ -83,8 +88,8 @@ def analyze_incident(
     speed = session.channel(SPEED_KMH).interp(t)
     steer_ch = session.optional_channel(STEERING_DEG)
     steer = steer_ch.interp(t) if steer_ch is not None else np.full_like(t, np.nan)
-    throttle_ch = session.optional_channel(THROTTLE_PCT)
-    throttle = throttle_ch.interp(t) if throttle_ch is not None else np.full_like(t, np.nan)
+    control_source, control_ch = select_power_control(session)
+    control = control_ch.interp(t) if control_ch is not None else np.full_like(t, np.nan)
     pressure_ch = session.optional_channel(BRAKE_PRESSURE_KPA)
     brake_pos_ch = session.optional_channel(BRAKE_POS_PCT)
     brake_pressure = pressure_ch.interp(t) if pressure_ch is not None else np.full_like(t, np.nan)
@@ -173,13 +178,24 @@ def analyze_incident(
                 )
             )
 
-        if throttle_ch is not None:
+        if control_ch is not None:
             lookback = max(0, onset_i - 25)
-            if np.nanmax(throttle[lookback : onset_i + 1]) >= 90.0:
-                lift_i = _first_index(np.isfinite(throttle) & (throttle <= 80.0), onset_i)
-                if lift_i is not None:
+            if np.nanmax(control[lookback : onset_i + 1]) >= 90.0:
+                reduction_i = _first_index(np.isfinite(control) & (control <= 80.0), onset_i)
+                if reduction_i is not None:
+                    event_type = (
+                        "throttle_reduction"
+                        if control_source == THROTTLE_PCT
+                        else "accelerator_reduction"
+                    )
                     timeline.append(
-                        _event("throttle_reduction", t, lift_i, throttle_pct=float(throttle[lift_i]))
+                        _event(
+                            event_type,
+                            t,
+                            reduction_i,
+                            control_source=control_source,
+                            control_pct=float(control[reduction_i]),
+                        )
                     )
 
         brake_active = np.zeros(len(t), dtype=bool)
@@ -235,6 +251,7 @@ def analyze_incident(
             "latitude_deg": origin_lat,
             "longitude_deg": origin_lon,
         },
+        "control_source": control_source,
         "summary": {
             "peak_abs_yaw_rate_dps": (
                 float(abs(yaw[peak_yaw_i])) if peak_yaw_i is not None else None
@@ -252,6 +269,7 @@ def analyze_incident(
             "Sideslip proxy becomes unreliable at low speed.",
             "Surface type is never inferred from telemetry; pass surface_change_s only when supported by video/observation.",
             "Steering-sign interpretation depends on the source convention.",
+            "Power-control source is explicit; accelerator pedal percentage is never relabeled as throttle-body percentage.",
         ],
     }
 
@@ -259,19 +277,22 @@ def analyze_incident(
         stride = max(1, int(sample_stride))
         rows = []
         for i in range(0, len(t), stride):
-            rows.append(
-                {
-                    "time_s": float(t[i]),
-                    "x_m": float(x[i]),
-                    "y_m": float(y[i]),
-                    "speed_kmh": float(speed[i]) if np.isfinite(speed[i]) else None,
-                    "yaw_rate_dps": float(yaw[i]) if np.isfinite(yaw[i]) else None,
-                    "steering_deg": float(steer[i]) if np.isfinite(steer[i]) else None,
-                    "throttle_pct": float(throttle[i]) if np.isfinite(throttle[i]) else None,
-                    "body_heading_estimate_deg": float(body[i]),
-                    "travel_heading_deg": float(travel[i]) if np.isfinite(travel[i]) else None,
-                    "sideslip_proxy_deg": float(beta[i]) if np.isfinite(beta[i]) else None,
-                }
-            )
+            row = {
+                "time_s": float(t[i]),
+                "x_m": float(x[i]),
+                "y_m": float(y[i]),
+                "speed_kmh": float(speed[i]) if np.isfinite(speed[i]) else None,
+                "yaw_rate_dps": float(yaw[i]) if np.isfinite(yaw[i]) else None,
+                "steering_deg": float(steer[i]) if np.isfinite(steer[i]) else None,
+                "control_pct": float(control[i]) if np.isfinite(control[i]) else None,
+                "body_heading_estimate_deg": float(body[i]),
+                "travel_heading_deg": float(travel[i]) if np.isfinite(travel[i]) else None,
+                "sideslip_proxy_deg": float(beta[i]) if np.isfinite(beta[i]) else None,
+            }
+            if control_source == THROTTLE_PCT:
+                row["throttle_pct"] = row["control_pct"]
+            elif control_source == ACCELERATOR_PCT:
+                row["accelerator_pct"] = row["control_pct"]
+            rows.append(row)
         result["samples"] = rows
     return result
