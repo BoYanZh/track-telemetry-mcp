@@ -59,7 +59,8 @@ def analyze_incident(
     does not infer asphalt vs dirt from telemetry alone.
 
     Power-control semantics are explicit: throttle-body percentage is preferred when
-    available; accelerator-pedal percentage is used only as a labeled fallback.
+    available in the incident window; accelerator-pedal percentage is used only as a
+    labeled fallback.
     """
     if end_s <= start_s:
         raise ValueError("end_s must be greater than start_s")
@@ -88,7 +89,11 @@ def analyze_incident(
     speed = session.channel(SPEED_KMH).interp(t)
     steer_ch = session.optional_channel(STEERING_DEG)
     steer = steer_ch.interp(t) if steer_ch is not None else np.full_like(t, np.nan)
-    control_source, control_ch = select_power_control(session)
+    control_source, control_ch = select_power_control(
+        session,
+        start_s=start_s,
+        end_s=end_s,
+    )
     control = control_ch.interp(t) if control_ch is not None else np.full_like(t, np.nan)
     pressure_ch = session.optional_channel(BRAKE_PRESSURE_KPA)
     brake_pos_ch = session.optional_channel(BRAKE_POS_PCT)
