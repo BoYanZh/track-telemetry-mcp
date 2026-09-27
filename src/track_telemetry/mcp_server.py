@@ -145,9 +145,7 @@ def _lap_xy_with_origin(
     return [(float(a), float(b)) for a, b in zip(x, y)]
 
 
-@mcp.tool()
-def list_sessions() -> dict[str, Any]:
-    """Discover RCZ sessions under TRACK_TELEMETRY_ROOT without exposing absolute paths."""
+def _list_sessions_data() -> dict[str, Any]:
     root = _root()
     if root is None:
         return {
@@ -170,6 +168,12 @@ def list_sessions() -> dict[str, Any]:
         "session_count": len(sessions),
         "sessions": sessions,
     }
+
+
+@mcp.tool()
+def list_sessions() -> dict[str, Any]:
+    """Discover RCZ sessions under TRACK_TELEMETRY_ROOT without exposing absolute paths."""
+    return _list_sessions_data()
 
 
 @mcp.tool()
