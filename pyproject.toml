@@ -17,7 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 rcz = [
-  "motec-log-generator @ git+https://github.com/BoYanZh/MotecLogGenerator.git@master",
+  "motec-log-generator @ git+https://github.com/BoYanZh/MotecLogGenerator.git@a5ebe305b0c92e0eb65cd84b256600aa03683d63",
 ]
 video = [
   "opencv-python-headless>=4.10",
