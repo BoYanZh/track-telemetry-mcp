@@ -110,7 +110,7 @@ uv venv
 uv pip install -e ".[dev,rcz,video]"
 ```
 
-Use only the extras you need. The `rcz` extra installs MotecLogGenerator directly from its GitHub repository so this project does not duplicate the RCZ decoder. The `video` extra installs headless OpenCV.
+Use only the extras you need. The `rcz` extra installs MotecLogGenerator from a pinned Git commit so RCZ decoding does not drift underneath a release. The `video` extra installs headless OpenCV.
 
 ## 30-second agent quick start
 
@@ -204,6 +204,53 @@ If `yaw_rate_source == gps_heading_derivative`, `analyze_slip_angle` rejects the
 
 See [`docs/slip-angle.md`](docs/slip-angle.md) for the derivation and limitations.
 
+## Recommended agent workflow
+
+Use lazy retrieval and deterministic measurement. Do not call every tool just because it is available.
+
+For a normal session review:
+
+```text
+list_sessions
+  -> prepare_session
+  -> inspect_session only when detailed channel/sample-rate context is needed
+  -> list_laps when lap selection needs more detail
+  -> analyze_lap / compare_laps / analyze_section as required
+  -> analyze_braking only for a braking question
+  -> analyze_slip_angle only when independent yaw is available and rotation/sliding matters
+  -> analyze_incident only for a known incident window
+```
+
+For a spin/off-track review:
+
+```text
+list_sessions
+  -> prepare_session
+  -> inspect_session
+  -> analyze_incident
+  -> analyze_slip_angle only if capabilities.channels.independent_yaw_rate == true
+  -> render_incident_player only if a visual replay is useful
+```
+
+For an external onboard reference:
+
+```text
+inspect the driver's RCZ
+  -> extract_reference_overlay only if raw reference telemetry is unavailable
+  -> confirm same layout or identify shared physical sections
+  -> compare only compatible laps/sections
+```
+
+Agent rules:
+
+- inspect capabilities before specialized analysis;
+- choose the smallest tool that answers the user's question;
+- do not call every supported tool by default;
+- do not compare normalized lap progress across different layouts;
+- do not call accelerator-pedal percentage throttle-body percentage;
+- do not claim vehicle sideslip from GPS-derived yaw rate;
+- treat video-derived values as approximate pseudo telemetry.
+
 ## MCP tools
 
 All RCZ-backed tools keep the existing `path` parameter for compatibility. With `TRACK_TELEMETRY_ROOT` configured, that parameter may be either a path inside the root or a `session_id` returned by `list_sessions()`.
@@ -212,9 +259,13 @@ All RCZ-backed tools keep the existing `path` parameter for compatibility. With 
 
 Discovers `.rcz` files under `TRACK_TELEMETRY_ROOT` and returns stable opaque session IDs plus source filenames. The tool does not expose absolute host paths.
 
+### `prepare_session(path)`
+
+Returns a compact PB/lap summary, channel capability matrix, supported/unsupported analysis tools, and a short recommended-tool list. This is the preferred second call after `list_sessions()` for an agent because it minimizes unnecessary tool calls.
+
 ### `inspect_session(path)`
 
-Returns metadata, lap table, available channels, sample rates, and fastest timed lap.
+Returns metadata, lap table, available channels, sample rates, fastest timed lap, and the same capability matrix. Use it when detailed channel quality/sample-rate context is needed.
 
 ### `list_laps(path)`
 
@@ -444,7 +495,7 @@ uv run ruff check .
 
 GitHub Actions runs both `ruff check .` and `pytest -q` on Python 3.10 and 3.12 for pushes and pull requests via [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
-The test suite includes regression coverage for accelerator-only logs, throttle priority when both channels exist, incident control-source labeling, HTML power-control display, slip-angle reconstruction, low-speed masking, and rejection of GPS-derived yaw for sideslip analysis.
+The test suite includes regression coverage for accelerator-only logs, throttle priority when both channels exist, incident control-source labeling, HTML power-control display, slip-angle reconstruction, low-speed masking, rejection of GPS-derived yaw for sideslip analysis, capability gating, and an in-process MCP client discovery/tool-call round trip.
 
 Raw `.rcz`, MoTeC files, video, and personal telemetry are ignored and should not be committed.
 
