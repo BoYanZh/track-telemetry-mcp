@@ -7,7 +7,7 @@ description: Quantitative, risk-aware HPDE and track telemetry analysis using de
 
 Use this skill when the user asks to analyze motorsports telemetry, compare laps, diagnose corner speed, evaluate braking, reconstruct a slide/spin/off-track incident, or recover approximate reference telemetry from an onboard video overlay.
 
-This is the detailed analysis policy for the MCP. Repository-aware agents should also follow the concise contract in `AGENTS.md`.
+This is the detailed analysis policy for the MCP. Repository-aware agents should also follow the concise contract in `AGENTS.md` and the standard review loop in `docs/analysis-methodology.md`.
 
 ## Agent contract
 
@@ -76,6 +76,15 @@ When a request spans multiple tasks, use `session_coach.md` as the primary struc
 
 ## Workflow
 
+Use `docs/analysis-methodology.md` as the overall review loop:
+
+```text
+Validate -> Select reference -> Locate time loss -> Classify -> Diagnose
+-> Cross-check -> Prioritize -> Prescribe -> Re-test
+```
+
+The steps below define the source-specific rules used inside that loop.
+
 ### 0. Discover and gate tools lazily
 
 For file-backed RCZ work, start with `list_sessions`, then call `prepare_session` for the selected session.
@@ -141,7 +150,8 @@ For each relevant corner or section, distinguish the primary issue:
 4. power control reapplied too late
 5. weak exit speed
 6. line / placement / geometry problem
-7. already good enough; further gain has poor risk/reward
+7. consistency / execution variance
+8. already good enough; further gain has poor risk/reward
 
 Do not collapse these into generic advice such as "carry more speed."
 
