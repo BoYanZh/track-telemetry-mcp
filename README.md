@@ -85,7 +85,8 @@ prompts/
   reference_comparison.md
   incident_review.md
   post_session_debrief.md
-skill/SKILL.md         reusable LLM workflow
+AGENTS.md              concise repo-level agent contract
+skill/SKILL.md         full telemetry analysis skill
 schemas/               documented MCP result shapes
 tests/                 synthetic-data tests only
 ```
@@ -121,6 +122,30 @@ Use only the extras you need. The `rcz` extra installs MotecLogGenerator from a 
 5. Call only the smallest relevant analysis tool, then use `skill/SKILL.md` or the task prompts in `prompts/` for interpretation.
 
 The session ID is a stable opaque identifier derived from the file's path relative to the configured telemetry root. Agents do not need the host's absolute filesystem path.
+
+### Copy-paste agent instruction
+
+For a general-purpose coding or assistant agent that can use this MCP, the following is enough to get started:
+
+```text
+For motorsports telemetry analysis, use the track-telemetry MCP.
+
+Start with:
+1. list_sessions
+2. prepare_session for the selected session
+
+Use inspect_session only when detailed channel/sample-rate context is needed.
+Use deterministic MCP measurements instead of estimating telemetry values yourself.
+Call only the smallest set of analysis tools required for the user's question.
+Do not call every supported tool by default.
+
+Only use analyze_slip_angle when independent yaw rate is available.
+Only use compare_laps after confirming the same physical track layout.
+Do not relabel accelerator-pedal percentage as throttle-body percentage.
+Treat video-derived telemetry as approximate pseudo telemetry.
+```
+
+Repository-aware agents should read [`AGENTS.md`](AGENTS.md). Agents that support reusable skills should also load [`skill/SKILL.md`](skill/SKILL.md), which contains the full telemetry reasoning policy.
 
 ## Run locally over stdio
 
