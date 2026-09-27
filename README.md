@@ -186,8 +186,9 @@ Codex / Cursor / OpenCode / ChatGPT / other MCP clients
 
 ## Analysis guidance
 
-For complete agent behavior, coaching logic, incident interpretation, high-speed risk handling, and source semantics:
+For the standard review process and detailed agent behavior:
 
+- [`docs/analysis-methodology.md`](docs/analysis-methodology.md) — validate -> locate time loss -> diagnose -> prioritize -> re-test
 - [`AGENTS.md`](AGENTS.md) — concise repo-level agent contract
 - [`skill/SKILL.md`](skill/SKILL.md) — full telemetry-analysis policy
 - [`prompts/`](prompts/) — task-specific coaching/debrief structures
