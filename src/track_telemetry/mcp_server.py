@@ -189,16 +189,13 @@ def _session_capabilities(session: TelemetrySession) -> dict[str, Any]:
 def _prepare_session_data(session: TelemetrySession) -> dict[str, Any]:
     pb = fastest_timed_lap(session)
     capabilities = _session_capabilities(session)
-    preferred_order = [
-        "analyze_lap",
-        "compare_laps",
-        "analyze_section",
-        "analyze_braking",
-        "analyze_slip_angle",
-        "analyze_incident",
-    ]
+    general_order = ["analyze_lap", "compare_laps", "analyze_section"]
+    specialized_order = ["analyze_braking", "analyze_slip_angle", "analyze_incident"]
     recommended = [
-        name for name in preferred_order if capabilities["tool_support"].get(name, False)
+        name for name in general_order if capabilities["tool_support"].get(name, False)
+    ]
+    specialized = [
+        name for name in specialized_order if capabilities["tool_support"].get(name, False)
     ]
     return {
         "session_id": session.session_id,
@@ -207,8 +204,10 @@ def _prepare_session_data(session: TelemetrySession) -> dict[str, Any]:
         "timed_lap_numbers": [lap.number for lap in session.laps if lap.is_timed],
         "capabilities": capabilities,
         "recommended_tools": recommended,
+        "available_specialized_tools": specialized,
         "guidance": (
-            "Call only the smallest analysis tool needed for the user's question. "
+            "Start with the recommended general tools only as needed. Use specialized tools "
+            "only when the user's question specifically concerns braking, sliding, or an incident. "
             "Do not call every supported tool by default."
         ),
     }
