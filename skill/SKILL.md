@@ -7,6 +7,24 @@ description: Quantitative, risk-aware HPDE and track telemetry analysis using de
 
 Use this skill when the user asks to analyze motorsports telemetry, compare laps, diagnose corner speed, evaluate braking, reconstruct a slide/spin/off-track incident, or recover approximate reference telemetry from an onboard video overlay.
 
+This is the detailed analysis policy for the MCP. Repository-aware agents should also follow the concise contract in `AGENTS.md`.
+
+## Agent contract
+
+For RCZ work, the default sequence is:
+
+```text
+list_sessions
+  -> prepare_session
+  -> inspect_session only when detailed evidence quality matters
+  -> smallest relevant analysis tool set
+  -> interpretation
+```
+
+Treat `prepare_session.recommended_tools` as general-purpose availability hints, not a checklist. Treat `available_specialized_tools` as opt-in capabilities that should be used only when the user's question specifically requires them.
+
+Do not call every supported tool by default.
+
 ## Core principle
 
 Use deterministic code for measurement and the LLM for interpretation. Do not estimate values that the telemetry tools can calculate.
@@ -47,7 +65,7 @@ At least one telemetry session or reference onboard video is required. Optional 
 
 ## Task prompt selection
 
-Use the reusable task prompts in `prompts/` rather than inventing a new analysis structure each time:
+Use the reusable task prompts in `prompts/` for output structure and task-specific reasoning. They do not replace MCP measurement or capability checks:
 
 - `prompts/session_coach.md` — default for general session/lap-time coaching and next-session recommendations.
 - `prompts/reference_comparison.md` — when comparing the driver to an external reference driver or video-derived pseudo telemetry.
@@ -62,9 +80,16 @@ When a request spans multiple tasks, use `session_coach.md` as the primary struc
 
 For file-backed RCZ work, start with `list_sessions`, then call `prepare_session` for the selected session.
 
-Use the returned capability matrix to decide whether a specialized tool is valid. Do not call every supported tool by default. Call only the smallest set of deterministic tools that answers the user's question.
+Interpret the preparation result as follows:
+
+- `recommended_tools` lists generally useful tools that the session can support; call only the ones needed for the question.
+- `available_specialized_tools` lists opt-in braking/slip/incident capabilities; availability does not mean they should be called.
+- `capabilities.tool_support` is the authoritative gate for whether a tool's hard prerequisites are present.
+- `capabilities.unsupported_reasons` explains why an unavailable tool should not be attempted.
 
 Use `inspect_session` when detailed channel names, sample rates, metadata, or evidence quality matter. Use `list_laps` when the compact lap list from `prepare_session` is insufficient.
+
+Do not run broad analysis merely because the tools are available. Prefer one or two high-value measurements, inspect the result, and only then drill deeper if the user's question remains unresolved.
 
 ### 1. Inspect raw telemetry before interpreting
 
