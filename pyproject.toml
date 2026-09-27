@@ -17,7 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 rcz = [
-  "motec-log-generator @ git+https://github.com/BoYanZh/TrackTelemetryConverter.git@a5ebe305b0c92e0eb65cd84b256600aa03683d63",
+  "track-telemetry-converter @ git+https://github.com/BoYanZh/TrackTelemetryConverter.git@bd96cc281117ab18e63ad4916747a24eeae5cc79",
 ]
 video = [
   "opencv-python-headless>=4.10",

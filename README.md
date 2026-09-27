@@ -32,7 +32,7 @@ uv pip install -e ".[dev,rcz,video]"
 
 Use only the extras you need:
 
-- `rcz` — RaceChrono decoding through a pinned TrackTelemetryConverter commit
+- `rcz` — RaceChrono decoding through a pinned `track-telemetry-converter` commit
 - `video` — reference-video overlay extraction
 - `dev` — pytest + ruff
 
@@ -158,7 +158,7 @@ See [`docs/slip-angle.md`](docs/slip-angle.md) for the full sideslip derivation 
 RaceChrono .rcz
       |
       v
-TrackTelemetryConverter
+track_telemetry_converter
       |
       v
 TelemetrySession

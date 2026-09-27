@@ -11,11 +11,11 @@ from .models import ChannelSeries, Lap, TelemetrySession
 
 def _motec_dependencies():
     try:
-        from motec_log_generator import channels as mc
-        from motec_log_generator.log import DataLog
+        from track_telemetry_converter import channels as mc
+        from track_telemetry_converter.log import DataLog
     except ImportError as exc:
         raise RuntimeError(
-            "RCZ support requires TrackTelemetryConverter (motec-log-generator package). Install with: "
+            "RCZ support requires the track-telemetry-converter package. Install with: "
             "pip install -e '.[rcz]'"
         ) from exc
     return mc, DataLog
@@ -52,7 +52,7 @@ def load_rcz(
     target_session: str | None = None,
     mask_interp_gaps: bool = True,
 ) -> TelemetrySession:
-    """Parse an RCZ archive using TrackTelemetryConverter and normalize its useful channels."""
+    """Parse an RCZ archive using track_telemetry_converter and normalize its useful channels."""
     mc, DataLog = _motec_dependencies()
     source = Path(path).expanduser().resolve()
     if source.suffix.lower() != ".rcz":
