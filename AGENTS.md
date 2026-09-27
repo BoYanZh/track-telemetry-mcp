@@ -67,6 +67,8 @@ For high-speed sections, do not recommend deliberately adding slide because a re
 
 ## Detailed policy
 
-For the complete telemetry workflow, source semantics, incident rules, output format, and risk-aware coaching guidance, follow [`skill/SKILL.md`](skill/SKILL.md).
+For the standard review methodology — validate data, choose a reference, locate time loss first, diagnose, prioritize, prescribe, and re-test — follow [`docs/analysis-methodology.md`](docs/analysis-methodology.md).
+
+For source semantics, incident rules, output format, and risk-aware coaching guidance, follow [`skill/SKILL.md`](skill/SKILL.md).
 
 Task-specific prompts are in [`prompts/`](prompts/).
