@@ -205,7 +205,7 @@ def extract_reference_telemetry(
 ) -> list[dict[str, float | None]]:
     """Sample a video overlay and recover approximate speed + track-map position.
 
-    The returned schema mirrors the useful output from the Buttonwillow reference-video
+    The returned schema mirrors the useful output from the reference-video
     prototype: ``video_t``, ``map_x``, ``map_y``, ``speed_mph``, ``needle_angle``.
     Missing detections remain ``None`` rather than being silently invented.
     """

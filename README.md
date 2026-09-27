@@ -112,6 +112,16 @@ uv pip install -e ".[dev,rcz,video]"
 
 Use only the extras you need. The `rcz` extra installs MotecLogGenerator directly from its GitHub repository so this project does not duplicate the RCZ decoder. The `video` extra installs headless OpenCV.
 
+## 30-second agent quick start
+
+1. Put RaceChrono `.rcz` files under one telemetry directory.
+2. Start the server with `TRACK_TELEMETRY_ROOT` set to that directory.
+3. Have the agent call `list_sessions()`.
+4. Pass the returned `session_id` to `inspect_session`, `list_laps`, and the analysis tools via their existing `path` parameter.
+5. Use `skill/SKILL.md` or the task prompts in `prompts/` for the interpretation workflow.
+
+The session ID is a stable opaque identifier derived from the file's path relative to the configured telemetry root. Agents do not need the host's absolute filesystem path.
+
 ## Run locally over stdio
 
 The console entrypoint defaults to stdio:
@@ -121,7 +131,7 @@ TRACK_TELEMETRY_ROOT=/absolute/path/to/telemetry \
 uv run track-telemetry-mcp
 ```
 
-`TRACK_TELEMETRY_ROOT` is strongly recommended. When it is set, file-backed tools reject paths outside that directory.
+`TRACK_TELEMETRY_ROOT` is required by default. File-backed tools reject paths outside that directory, and relative paths are resolved inside it. For deliberate unrestricted local development only, set `TRACK_TELEMETRY_UNSAFE_ALLOW_ANY_PATH=1`; session discovery is disabled in that mode.
 
 Example MCP client config:
 
@@ -195,6 +205,12 @@ If `yaw_rate_source == gps_heading_derivative`, `analyze_slip_angle` rejects the
 See [`docs/slip-angle.md`](docs/slip-angle.md) for the derivation and limitations.
 
 ## MCP tools
+
+All RCZ-backed tools keep the existing `path` parameter for compatibility. With `TRACK_TELEMETRY_ROOT` configured, that parameter may be either a path inside the root or a `session_id` returned by `list_sessions()`.
+
+### `list_sessions()`
+
+Discovers `.rcz` files under `TRACK_TELEMETRY_ROOT` and returns stable opaque session IDs plus source filenames. The tool does not expose absolute host paths.
 
 ### `inspect_session(path)`
 
@@ -308,7 +324,7 @@ Current automated channels:
 - calibrated speed in mph
 - track-map marker X/Y in the video's overlay coordinate system
 
-The useful output schema mirrors the prototype used for the Buttonwillow reference analysis:
+The useful output schema mirrors the reference-video prototype:
 
 ```text
 video_t,map_x,map_y,speed_mph,needle_angle
@@ -375,7 +391,7 @@ For different track layouts, the overlay map/onboard video can identify shared p
 
 ## Incident HTML workflow
 
-The HTML renderer generalizes the useful parts of the Buttonwillow spin prototype:
+The HTML renderer generalizes the useful parts of the incident-analysis prototype:
 
 ```text
 analyze_incident(..., include_samples=True, sample_stride=1)
@@ -390,7 +406,7 @@ render_incident_player / write_incident_html
 standalone interactive HTML
 ```
 
-The renderer does not bake Buttonwillow-specific event times or base64 telemetry into the template.
+The renderer does not bake case-specific event times or base64 telemetry into the template.
 
 ## Coaching prompts
 

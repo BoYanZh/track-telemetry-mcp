@@ -9,6 +9,7 @@ description = "Deterministic motorsports telemetry analysis exposed through MCP.
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "BoYanZh" }]
+license = { text = "MIT" }
 dependencies = [
   "numpy>=1.24",
   "mcp>=2,<3",

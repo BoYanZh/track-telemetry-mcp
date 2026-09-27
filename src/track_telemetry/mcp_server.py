@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 from functools import lru_cache
 from pathlib import Path
@@ -29,9 +30,24 @@ from .visualization import write_incident_html
 mcp = MCPServer("track-telemetry")
 
 
+def _unsafe_allow_any_path() -> bool:
+    value = os.getenv("TRACK_TELEMETRY_UNSAFE_ALLOW_ANY_PATH", "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
 def _root() -> Path | None:
     root_value = os.getenv("TRACK_TELEMETRY_ROOT")
-    return Path(root_value).expanduser().resolve() if root_value else None
+    if root_value:
+        root = Path(root_value).expanduser().resolve()
+        if not root.is_dir():
+            raise RuntimeError(f"TRACK_TELEMETRY_ROOT is not a directory: {root}")
+        return root
+    if _unsafe_allow_any_path():
+        return None
+    raise RuntimeError(
+        "TRACK_TELEMETRY_ROOT is required. For deliberate unrestricted local development "
+        "only, set TRACK_TELEMETRY_UNSAFE_ALLOW_ANY_PATH=1."
+    )
 
 
 def _inside_root(path: Path) -> None:
@@ -40,8 +56,32 @@ def _inside_root(path: Path) -> None:
         raise PermissionError(f"Path is outside TRACK_TELEMETRY_ROOT: {path}")
 
 
+def _session_id(path: Path, root: Path) -> str:
+    relative = path.relative_to(root).as_posix()
+    return hashlib.sha256(relative.encode("utf-8")).hexdigest()[:16]
+
+
+def _session_index() -> dict[str, Path]:
+    root = _root()
+    if root is None:
+        return {}
+    sessions: dict[str, Path] = {}
+    for candidate in root.rglob("*.rcz"):
+        if not candidate.is_file():
+            continue
+        resolved = candidate.resolve()
+        if not resolved.is_relative_to(root):
+            continue
+        sessions[_session_id(resolved, root)] = resolved
+    return sessions
+
+
 def _resolve_existing(raw_path: str, allowed_suffixes: set[str]) -> Path:
-    path = Path(raw_path).expanduser().resolve()
+    candidate = Path(raw_path).expanduser()
+    root = _root()
+    if root is not None and not candidate.is_absolute():
+        candidate = root / candidate
+    path = candidate.resolve()
     _inside_root(path)
     if path.suffix.lower() not in allowed_suffixes:
         allowed = ", ".join(sorted(allowed_suffixes))
@@ -52,7 +92,11 @@ def _resolve_existing(raw_path: str, allowed_suffixes: set[str]) -> Path:
 
 
 def _resolve_output(raw_path: str, expected_suffix: str) -> Path:
-    path = Path(raw_path).expanduser().resolve()
+    candidate = Path(raw_path).expanduser()
+    root = _root()
+    if root is not None and not candidate.is_absolute():
+        candidate = root / candidate
+    path = candidate.resolve()
     _inside_root(path)
     if path.suffix.lower() != expected_suffix:
         raise ValueError(f"Output must end in {expected_suffix}")
@@ -61,6 +105,9 @@ def _resolve_output(raw_path: str, expected_suffix: str) -> Path:
 
 
 def _resolve_rcz(raw_path: str) -> Path:
+    session = _session_index().get(raw_path)
+    if session is not None:
+        return session
     return _resolve_existing(raw_path, {".rcz"})
 
 
@@ -99,8 +146,35 @@ def _lap_xy_with_origin(
 
 
 @mcp.tool()
+def list_sessions() -> dict[str, Any]:
+    """Discover RCZ sessions under TRACK_TELEMETRY_ROOT without exposing absolute paths."""
+    root = _root()
+    if root is None:
+        return {
+            "discovery_available": False,
+            "sessions": [],
+            "reason": "Session discovery requires TRACK_TELEMETRY_ROOT.",
+        }
+    sessions = [
+        {
+            "session_id": session_id,
+            "source_name": path.name,
+        }
+        for session_id, path in sorted(
+            _session_index().items(),
+            key=lambda item: item[1].relative_to(root).as_posix().lower(),
+        )
+    ]
+    return {
+        "discovery_available": True,
+        "session_count": len(sessions),
+        "sessions": sessions,
+    }
+
+
+@mcp.tool()
 def inspect_session(path: str) -> dict[str, Any]:
-    """Inspect one RCZ session: metadata, channels, sampling rates, laps, and PB."""
+    """Inspect one RCZ session by path or list_sessions session ID."""
     session = _load(path)
     result = session.to_summary()
     pb = fastest_timed_lap(session)
@@ -110,7 +184,7 @@ def inspect_session(path: str) -> dict[str, Any]:
 
 @mcp.tool()
 def list_laps(path: str) -> dict[str, Any]:
-    """Return the compact lap table for an RCZ session."""
+    """Return the compact lap table for an RCZ session selected by path or session ID."""
     session = _load(path)
     pb = fastest_timed_lap(session)
     return {
@@ -122,7 +196,7 @@ def list_laps(path: str) -> dict[str, Any]:
 
 @mcp.tool()
 def analyze_lap(path: str, lap_number: int) -> dict[str, Any]:
-    """Return deterministic lap-level speed, input, G, and yaw summary metrics."""
+    """Return deterministic lap metrics for an RCZ selected by path or session ID."""
     return lap_summary(_load(path), lap_number)
 
 
@@ -311,6 +385,7 @@ def render_incident_player(
 
 def main() -> None:
     """Run stdio by default, or Streamable HTTP when requested by environment."""
+    _root()
     transport = os.getenv("TRACK_TELEMETRY_TRANSPORT", "stdio").strip().lower()
     if transport == "stdio":
         mcp.run()
