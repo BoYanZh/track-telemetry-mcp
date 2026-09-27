@@ -117,8 +117,8 @@ Use only the extras you need. The `rcz` extra installs MotecLogGenerator from a 
 1. Put RaceChrono `.rcz` files under one telemetry directory.
 2. Start the server with `TRACK_TELEMETRY_ROOT` set to that directory.
 3. Have the agent call `list_sessions()`.
-4. Pass the returned `session_id` to `inspect_session`, `list_laps`, and the analysis tools via their existing `path` parameter.
-5. Use `skill/SKILL.md` or the task prompts in `prompts/` for the interpretation workflow.
+4. Pass the returned `session_id` to `prepare_session()` first; use `inspect_session()` only when detailed channel/sample-rate context is needed.
+5. Call only the smallest relevant analysis tool, then use `skill/SKILL.md` or the task prompts in `prompts/` for interpretation.
 
 The session ID is a stable opaque identifier derived from the file's path relative to the configured telemetry root. Agents do not need the host's absolute filesystem path.
 
@@ -261,7 +261,7 @@ Discovers `.rcz` files under `TRACK_TELEMETRY_ROOT` and returns stable opaque se
 
 ### `prepare_session(path)`
 
-Returns a compact PB/lap summary, channel capability matrix, supported/unsupported analysis tools, and a short recommended-tool list. This is the preferred second call after `list_sessions()` for an agent because it minimizes unnecessary tool calls.
+Returns a compact PB/lap summary, channel capability matrix, supported/unsupported analysis tools, general-purpose `recommended_tools`, and separately listed `available_specialized_tools`. This is the preferred second call after `list_sessions()` because it minimizes unnecessary tool calls and keeps braking/slip/incident analysis opt-in.
 
 ### `inspect_session(path)`
 
