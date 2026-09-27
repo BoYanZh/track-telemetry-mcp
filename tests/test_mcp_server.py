@@ -146,7 +146,9 @@ def test_prepare_session_is_lazy_and_capability_aware() -> None:
     assert result["fastest_timed_lap_number"] == 1
     assert result["timed_lap_numbers"] == [1]
     assert "analyze_lap" in result["recommended_tools"]
-    assert "analyze_incident" in result["recommended_tools"]
+    assert "analyze_section" in result["recommended_tools"]
+    assert "analyze_incident" not in result["recommended_tools"]
+    assert "analyze_incident" in result["available_specialized_tools"]
     assert "Do not call every supported tool" in result["guidance"]
 
 
