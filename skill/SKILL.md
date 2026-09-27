@@ -58,12 +58,21 @@ When a request spans multiple tasks, use `session_coach.md` as the primary struc
 
 ## Workflow
 
+### 0. Discover and gate tools lazily
+
+For file-backed RCZ work, start with `list_sessions`, then call `prepare_session` for the selected session.
+
+Use the returned capability matrix to decide whether a specialized tool is valid. Do not call every supported tool by default. Call only the smallest set of deterministic tools that answers the user's question.
+
+Use `inspect_session` when detailed channel names, sample rates, metadata, or evidence quality matter. Use `list_laps` when the compact lap list from `prepare_session` is insufficient.
+
 ### 1. Inspect raw telemetry before interpreting
 
-For RCZ/session analysis call `inspect_session` and `list_laps` first.
+For RCZ/session analysis, inspect the selected session before interpreting measurements.
 
 Check:
 
+- `capabilities.tool_support` before specialized analysis
 - available channels and sample rates
 - whether channels are missing, frozen, sparse, or obviously invalid
 - lap types and PB
