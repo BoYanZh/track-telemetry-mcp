@@ -6,7 +6,7 @@ Deterministic motorsports telemetry analysis for MCP agents.
 
 ## Highlights
 
-- RaceChrono `.rcz` support via [MotecLogGenerator](https://github.com/BoYanZh/MotecLogGenerator)
+- RaceChrono `.rcz` support via [TrackTelemetryConverter](https://github.com/BoYanZh/TrackTelemetryConverter)
 - lap/PB discovery and lap summaries
 - section analysis: entry, minimum, exit speed, braking, and power-control timing
 - same-layout lap comparison with an explicit layout guard
@@ -32,7 +32,7 @@ uv pip install -e ".[dev,rcz,video]"
 
 Use only the extras you need:
 
-- `rcz` — RaceChrono decoding through a pinned MotecLogGenerator commit
+- `rcz` — RaceChrono decoding through a pinned TrackTelemetryConverter commit
 - `video` — reference-video overlay extraction
 - `dev` — pytest + ruff
 
@@ -158,7 +158,7 @@ See [`docs/slip-angle.md`](docs/slip-angle.md) for the full sideslip derivation 
 RaceChrono .rcz
       |
       v
-MotecLogGenerator
+TrackTelemetryConverter
       |
       v
 TelemetrySession

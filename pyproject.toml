@@ -17,7 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 rcz = [
-  "motec-log-generator @ git+https://github.com/BoYanZh/MotecLogGenerator.git@a5ebe305b0c92e0eb65cd84b256600aa03683d63",
+  "motec-log-generator @ git+https://github.com/BoYanZh/TrackTelemetryConverter.git@a5ebe305b0c92e0eb65cd84b256600aa03683d63",
 ]
 video = [
   "opencv-python-headless>=4.10",
@@ -32,7 +32,7 @@ track-telemetry-mcp = "track_telemetry.mcp_server:main"
 
 [project.urls]
 Repository = "https://github.com/BoYanZh/track-telemetry-mcp"
-MotecLogGenerator = "https://github.com/BoYanZh/MotecLogGenerator"
+TrackTelemetryConverter = "https://github.com/BoYanZh/TrackTelemetryConverter"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

@@ -1,4 +1,4 @@
-"""Adapter from BoYanZh/MotecLogGenerator into the normalized session model."""
+"""Adapter from BoYanZh/TrackTelemetryConverter into the normalized session model."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ def _motec_dependencies():
         from motec_log_generator.log import DataLog
     except ImportError as exc:
         raise RuntimeError(
-            "RCZ support requires MotecLogGenerator. Install with: "
+            "RCZ support requires TrackTelemetryConverter (motec-log-generator package). Install with: "
             "pip install -e '.[rcz]'"
         ) from exc
     return mc, DataLog
@@ -52,7 +52,7 @@ def load_rcz(
     target_session: str | None = None,
     mask_interp_gaps: bool = True,
 ) -> TelemetrySession:
-    """Parse an RCZ archive using MotecLogGenerator and normalize its useful channels."""
+    """Parse an RCZ archive using TrackTelemetryConverter and normalize its useful channels."""
     mc, DataLog = _motec_dependencies()
     source = Path(path).expanduser().resolve()
     if source.suffix.lower() != ".rcz":

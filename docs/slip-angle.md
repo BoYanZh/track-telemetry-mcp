@@ -6,7 +6,7 @@ measurement.
 
 ## Why RaceChrono GPS heading is not enough by itself
 
-`MotecLogGenerator` parses RaceChrono GPS heading into `CH_GPS_HEADING` / `YawNorth` and,
+`TrackTelemetryConverter` parses RaceChrono GPS heading into `CH_GPS_HEADING` / `YawNorth` and,
 when a real yaw-rate channel is unavailable, can derive yaw rate by differentiating that
 heading. In RaceChrono terminology the GPS quantity is the receiver's **bearing/course**:
 it describes the direction of motion over the ground, not the physical direction the car
