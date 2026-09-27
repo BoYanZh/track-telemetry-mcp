@@ -156,23 +156,23 @@ def _session_capabilities(session: TelemetrySession) -> dict[str, Any]:
         "power_control": has_power_control,
     }
     tool_support = {
-        "analyze_lap": bool(timed_laps) and has_speed,
+        "analyze_lap": bool(timed_laps),
         "analyze_section": bool(timed_laps) and has_gps_trace and has_speed,
-        "analyze_braking": has_speed and LONG_G in channels and has_brake_control,
+        "analyze_braking": LONG_G in channels,
         "analyze_slip_angle": has_gps_trace and has_speed and independent_yaw,
         "analyze_incident": has_gps_trace and has_speed and has_yaw,
-        "compare_laps": bool(timed_laps) and has_gps_trace and has_speed,
+        "compare_laps": bool(timed_laps) and has_gps_trace,
     }
     reasons: dict[str, str] = {}
     requirements = {
-        "analyze_lap": "requires at least one timed lap and speed",
+        "analyze_lap": "requires at least one timed lap",
         "analyze_section": "requires timed laps, GPS latitude/longitude, and speed",
-        "analyze_braking": "requires speed, longitudinal G, and brake pressure/pedal",
+        "analyze_braking": "requires longitudinal G; brake/speed channels enrich event metrics",
         "analyze_slip_angle": (
             "requires GPS latitude/longitude, speed, and yaw rate independent of GPS course"
         ),
         "analyze_incident": "requires GPS latitude/longitude, speed, and yaw rate",
-        "compare_laps": "requires timed laps, GPS latitude/longitude, and speed",
+        "compare_laps": "requires timed laps and GPS latitude/longitude",
     }
     for tool_name, supported in tool_support.items():
         if not supported:
@@ -314,8 +314,8 @@ def list_laps(path: str) -> dict[str, Any]:
 def analyze_lap(path: str, lap_number: int) -> dict[str, Any]:
     """Measure one timed lap's summary metrics.
 
-    Use for a known lap after inspection. Requires a valid timed lap and speed data.
-    Do not use this alone to diagnose a specific corner when analyze_section can measure
+    Use for a known lap after inspection. Requires a valid timed lap; missing optional
+    channels produce null metrics. Do not use this alone to diagnose a specific corner when analyze_section can measure
     entry/minimum/exit behavior directly.
     """
     return lap_summary(_load(path), lap_number)
@@ -341,9 +341,10 @@ def analyze_section(
 def analyze_braking(path: str, lap_number: int | None = None) -> dict[str, Any]:
     """Measure brake events and raw vs sustained longitudinal deceleration.
 
-    Use when braking strength, duration, or ramp is the question. Requires speed,
-    longitudinal G, and brake pressure/pedal data. Do not infer ABS activation from brake
-    pressure alone, and do not call this just because a session review is requested.
+    Use when braking/deceleration is the question. Longitudinal G is required; brake
+    pressure/pedal enables event detection and speed enriches entry/minimum-speed metrics.
+    Do not infer ABS activation from brake pressure alone, and do not call this merely
+    because a general session review was requested.
     """
     return braking_metrics(_load(path), lap_number)
 
