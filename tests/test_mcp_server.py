@@ -20,7 +20,7 @@ def test_unsafe_any_path_requires_explicit_opt_in(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv("TRACK_TELEMETRY_UNSAFE_ALLOW_ANY_PATH", "1")
 
     assert mcp_server._root() is None
-    result = mcp_server.list_sessions()
+    result = mcp_server._list_sessions_data()
     assert result["discovery_available"] is False
     assert result["sessions"] == []
 
@@ -40,7 +40,7 @@ def test_list_sessions_returns_stable_opaque_ids(
     monkeypatch.setenv("TRACK_TELEMETRY_ROOT", str(root))
     monkeypatch.delenv("TRACK_TELEMETRY_UNSAFE_ALLOW_ANY_PATH", raising=False)
 
-    result = mcp_server.list_sessions()
+    result = mcp_server._list_sessions_data()
     assert result["discovery_available"] is True
     assert result["session_count"] == 2
     assert {item["source_name"] for item in result["sessions"]} == {
@@ -50,7 +50,7 @@ def test_list_sessions_returns_stable_opaque_ids(
     assert all(len(item["session_id"]) == 16 for item in result["sessions"])
     assert all(str(root) not in item["session_id"] for item in result["sessions"])
 
-    again = mcp_server.list_sessions()
+    again = mcp_server._list_sessions_data()
     assert again["sessions"] == result["sessions"]
 
     by_name = {item["source_name"]: item["session_id"] for item in result["sessions"]}
