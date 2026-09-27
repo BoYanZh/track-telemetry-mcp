@@ -12,7 +12,18 @@ import numpy as np
 from mcp.server import MCPServer
 
 from .braking import analyze_braking as braking_metrics
-from .channels import GPS_LATITUDE_DEG, GPS_LONGITUDE_DEG
+from .channels import (
+    ACCELERATOR_PCT,
+    BRAKE_POS_PCT,
+    BRAKE_PRESSURE_KPA,
+    GPS_LATITUDE_DEG,
+    GPS_LONGITUDE_DEG,
+    LONG_G,
+    SPEED_KMH,
+    STEERING_DEG,
+    THROTTLE_PCT,
+    YAW_RATE_DPS,
+)
 from .geometry import latlon_to_xy_m
 from .incidents import analyze_incident as incident_metrics
 from .laps import compare_laps as compare_lap_data
@@ -122,6 +133,87 @@ def _load(raw_path: str) -> TelemetrySession:
     return _load_cached(str(path), path.stat().st_mtime_ns)
 
 
+def _session_capabilities(session: TelemetrySession) -> dict[str, Any]:
+    channels = set(session.channels)
+    timed_laps = [lap for lap in session.laps if lap.is_timed]
+    yaw_source = str(session.metadata.get("yaw_rate_source", "unknown"))
+    has_gps_trace = {GPS_LATITUDE_DEG, GPS_LONGITUDE_DEG}.issubset(channels)
+    has_speed = SPEED_KMH in channels
+    has_yaw = YAW_RATE_DPS in channels
+    has_brake_control = BRAKE_PRESSURE_KPA in channels or BRAKE_POS_PCT in channels
+    has_power_control = THROTTLE_PCT in channels or ACCELERATOR_PCT in channels
+    independent_yaw = has_yaw and yaw_source != "gps_heading_derivative"
+
+    channel_capabilities = {
+        "timed_laps": bool(timed_laps),
+        "gps_trace": has_gps_trace,
+        "speed": has_speed,
+        "longitudinal_g": LONG_G in channels,
+        "yaw_rate": has_yaw,
+        "independent_yaw_rate": independent_yaw,
+        "steering": STEERING_DEG in channels,
+        "brake_control": has_brake_control,
+        "power_control": has_power_control,
+    }
+    tool_support = {
+        "analyze_lap": bool(timed_laps) and has_speed,
+        "analyze_section": bool(timed_laps) and has_gps_trace and has_speed,
+        "analyze_braking": has_speed and LONG_G in channels and has_brake_control,
+        "analyze_slip_angle": has_gps_trace and has_speed and independent_yaw,
+        "analyze_incident": has_gps_trace and has_speed and has_yaw,
+        "compare_laps": bool(timed_laps) and has_gps_trace and has_speed,
+    }
+    reasons: dict[str, str] = {}
+    requirements = {
+        "analyze_lap": "requires at least one timed lap and speed",
+        "analyze_section": "requires timed laps, GPS latitude/longitude, and speed",
+        "analyze_braking": "requires speed, longitudinal G, and brake pressure/pedal",
+        "analyze_slip_angle": (
+            "requires GPS latitude/longitude, speed, and yaw rate independent of GPS course"
+        ),
+        "analyze_incident": "requires GPS latitude/longitude, speed, and yaw rate",
+        "compare_laps": "requires timed laps, GPS latitude/longitude, and speed",
+    }
+    for tool_name, supported in tool_support.items():
+        if not supported:
+            reasons[tool_name] = requirements[tool_name]
+
+    return {
+        "channels": channel_capabilities,
+        "yaw_rate_source": yaw_source,
+        "tool_support": tool_support,
+        "unsupported_reasons": reasons,
+    }
+
+
+def _prepare_session_data(session: TelemetrySession) -> dict[str, Any]:
+    pb = fastest_timed_lap(session)
+    capabilities = _session_capabilities(session)
+    preferred_order = [
+        "analyze_lap",
+        "compare_laps",
+        "analyze_section",
+        "analyze_braking",
+        "analyze_slip_angle",
+        "analyze_incident",
+    ]
+    recommended = [
+        name for name in preferred_order if capabilities["tool_support"].get(name, False)
+    ]
+    return {
+        "session_id": session.session_id,
+        "source_name": Path(session.source).name,
+        "fastest_timed_lap_number": pb.number if pb is not None else None,
+        "timed_lap_numbers": [lap.number for lap in session.laps if lap.is_timed],
+        "capabilities": capabilities,
+        "recommended_tools": recommended,
+        "guidance": (
+            "Call only the smallest analysis tool needed for the user's question. "
+            "Do not call every supported tool by default."
+        ),
+    }
+
+
 def _lap_xy_with_origin(
     session: TelemetrySession,
     lap_number: int,
@@ -178,17 +270,38 @@ def list_sessions() -> dict[str, Any]:
 
 @mcp.tool()
 def inspect_session(path: str) -> dict[str, Any]:
-    """Inspect one RCZ session by path or list_sessions session ID."""
+    """Inspect a session before choosing analysis tools.
+
+    Use first for RCZ analysis after list_sessions. Returns channels, sample rates, laps,
+    PB, and a capability matrix. Do not infer that an analysis is valid merely because a
+    similarly named channel exists; consult capabilities/tool_support.
+    """
     session = _load(path)
     result = session.to_summary()
     pb = fastest_timed_lap(session)
     result["fastest_timed_lap"] = pb.to_dict() if pb is not None else None
+    result["capabilities"] = _session_capabilities(session)
     return result
 
 
 @mcp.tool()
+def prepare_session(path: str) -> dict[str, Any]:
+    """Prepare an agent to analyze one RCZ session with minimal tool calls.
+
+    Use after list_sessions when the agent needs a concise PB/lap/capability summary.
+    The returned recommended_tools are availability hints, not an instruction to call all
+    of them. Choose only tools relevant to the user's question.
+    """
+    return _prepare_session_data(_load(path))
+
+
+@mcp.tool()
 def list_laps(path: str) -> dict[str, Any]:
-    """Return the compact lap table for an RCZ session selected by path or session ID."""
+    """List laps and PB for a selected RCZ session.
+
+    Use when lap selection matters. Prefer inspect_session/prepare_session first when the
+    agent has not yet checked available channels or analysis capabilities.
+    """
     session = _load(path)
     pb = fastest_timed_lap(session)
     return {
@@ -200,7 +313,12 @@ def list_laps(path: str) -> dict[str, Any]:
 
 @mcp.tool()
 def analyze_lap(path: str, lap_number: int) -> dict[str, Any]:
-    """Return deterministic lap metrics for an RCZ selected by path or session ID."""
+    """Measure one timed lap's summary metrics.
+
+    Use for a known lap after inspection. Requires a valid timed lap and speed data.
+    Do not use this alone to diagnose a specific corner when analyze_section can measure
+    entry/minimum/exit behavior directly.
+    """
     return lap_summary(_load(path), lap_number)
 
 
@@ -211,13 +329,23 @@ def analyze_section(
     start_progress: float,
     end_progress: float,
 ) -> dict[str, Any]:
-    """Analyze entry/min/exit and pedal behavior in a normalized-distance lap section."""
+    """Measure one normalized-distance section of a timed lap.
+
+    Use for corner/section diagnosis after confirming the lap/layout. Requires GPS trace,
+    speed, and a timed lap. start_progress/end_progress are lap fractions, not named
+    corners. Do not compare different layouts by matching the same progress values.
+    """
     return section_metrics(_load(path), lap_number, start_progress, end_progress)
 
 
 @mcp.tool()
 def analyze_braking(path: str, lap_number: int | None = None) -> dict[str, Any]:
-    """Measure brake events, pressure ramp, and raw vs sustained longitudinal deceleration."""
+    """Measure brake events and raw vs sustained longitudinal deceleration.
+
+    Use when braking strength, duration, or ramp is the question. Requires speed,
+    longitudinal G, and brake pressure/pedal data. Do not infer ABS activation from brake
+    pressure alone, and do not call this just because a session review is requested.
+    """
     return braking_metrics(_load(path), lap_number)
 
 
@@ -232,10 +360,11 @@ def analyze_slip_angle(
     include_samples: bool = False,
     sample_stride: int = 5,
 ) -> dict[str, Any]:
-    """Estimate vehicle sideslip proxy from GPS course and independent yaw rate.
+    """Estimate bounded-window vehicle sideslip proxy from GPS course and yaw rate.
 
-    This is not tire slip angle. Body heading is estimated by integrating yaw rate from
-    an anchor where sideslip is assumed near zero. GPS-derived yaw rate is rejected.
+    Use only when rotation/sliding is relevant and inspect_session reports
+    independent_yaw_rate=true. This is not tire slip angle. Choose an anchor where
+    sideslip is plausibly near zero; GPS-derived yaw rate is rejected.
     """
     return slip_angle_metrics(
         _load(path),
@@ -260,7 +389,12 @@ def analyze_incident(
     include_samples: bool = False,
     sample_stride: int = 5,
 ) -> dict[str, Any]:
-    """Reconstruct a slide/spin timeline from GPS travel direction, yaw, steering, and pedals."""
+    """Reconstruct a bounded slide/spin/off-track timeline.
+
+    Use for a known incident window, not routine session review. Requires GPS trace,
+    speed, and yaw rate; steering/power/brake channels enrich the result when present.
+    A supplied surface_change_s must come from video/observation, not telemetry inference.
+    """
     return incident_metrics(
         _load(path),
         start_s,
@@ -282,7 +416,12 @@ def compare_laps(
     same_layout_confirmed: bool = False,
     mini_sectors: int = 20,
 ) -> dict[str, Any]:
-    """Compare two laps by normalized GPS distance only after confirming identical layout."""
+    """Compare two laps by normalized GPS distance.
+
+    Use only after independently confirming both laps use the same physical layout, then
+    set same_layout_confirmed=true. Never use normalized lap progress to compare different
+    layouts; compare shared physical sections instead.
+    """
     return compare_lap_data(
         _load(path_a),
         lap_a,
@@ -305,8 +444,9 @@ def extract_reference_overlay(
 ) -> dict[str, Any]:
     """Recover approximate speed and track-map position from a calibrated onboard overlay.
 
-    The video values are reference/pseudo telemetry, not raw logger data. Configuration
-    supplies the speedometer ROI, dial calibration, and optional track-map marker color.
+    Use only when raw reference telemetry is unavailable and a calibrated overlay config
+    exists. The result is pseudo telemetry, not RCZ-quality data. Do not invent brake,
+    throttle, RPM, gear, or other channels that this extractor did not measure.
     """
     video = _resolve_existing(video_path, {".mp4", ".mov", ".mkv", ".avi", ".webm"})
     config_file = _resolve_existing(config_path, {".json"})
@@ -351,7 +491,11 @@ def render_incident_player(
     sample_stride: int = 1,
     reference_lap_number: int | None = None,
 ) -> dict[str, Any]:
-    """Write a standalone interactive HTML incident animation using real GPS samples."""
+    """Write a standalone HTML replay for an already identified incident.
+
+    Use after incident analysis when a visual replay helps. The reference lap is only a
+    trajectory reference and must not be interpreted as a track/asphalt boundary.
+    """
     session = _load(path)
     incident = incident_metrics(
         session,
