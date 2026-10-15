@@ -21,6 +21,37 @@ def measured_source(source: str) -> bool:
     return source in {"can", "imu"} or source.startswith(("rcz_can_", "rcz_gyro_", "rcz_accelerometer_"))
 
 
+def native_rate(session: TelemetrySession, name: str, lap_number: int) -> float | None:
+    """Resolve native rates from recorder inventory, never from resampled output."""
+    declared = session.metadata.get("native_sample_rate_hz", {}).get(name)
+    if declared is not None:
+        return float(declared)
+    lap = session.lap(lap_number)
+    source = channel_source(session, name, lap_number)
+    for inventory in session.metadata.get("device_summary_by_stint", []):
+        if inventory["stint"] != lap.stint:
+            continue
+        for device in inventory.get("devices", []):
+            dev_id = device["device_id"]
+            prefix = f"rcz_can_12_{dev_id}_pid_"
+            if device["role"] == "can_obd" and source.startswith(prefix):
+                return device.get("native_can_pid_rates", {}).get(
+                    "pid_" + source[len(prefix):], {}).get("rate_hz")
+            if ((device["role"] == "gyroscope" and source == f"rcz_gyro_3_{dev_id}") or
+                    (device["role"] == "accelerometer" and source == f"rcz_accelerometer_2_{dev_id}") or
+                    (device["role"] == "gps" and source == f"rcz_gps_1_{dev_id}")):
+                return device.get("native_sample_rate_hz")
+    return None
+
+
+def require_native_rates(session: TelemetrySession, lap_number: int,
+                         names: tuple[str, ...], min_hz: float) -> dict:
+    rates = {name: native_rate(session, name, lap_number) for name in names}
+    if any(rate is None or not np.isfinite(rate) or rate < min_hz for rate in rates.values()):
+        raise ValueError(f"Verified native sampling >= {min_hz:g} Hz required: {rates}")
+    return rates
+
+
 def matched_window(
     session: TelemetrySession, lap_number: int, names: tuple[str, ...],
     *, min_hz: float = 5.0, max_gap_s: float = 0.25, tolerance_s: float = 0.02,
@@ -69,4 +100,5 @@ def matched_window(
         "max_gap_s": max_gap_s,
         "native_rate_note": "Output Hz may reflect converter resampling; native Hz is not inferred.",
         "sources": {name: channel_source(session, name, lap_number) for name in names},
+        "native_sample_rate_hz": {name: native_rate(session, name, lap_number) for name in names},
     }

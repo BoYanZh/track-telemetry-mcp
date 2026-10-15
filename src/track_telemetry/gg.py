@@ -14,6 +14,8 @@ def analyze_gg_usage(session: TelemetrySession, lap_number: int) -> dict:
     _, values, weights, quality = matched_window(session, lap_number, (LAT_G, LONG_G))
     if not all(measured_source(s) for s in quality["sources"].values()):
         raise ValueError("G usage requires verified measured acceleration sources")
+    if any(rate is not None and rate < 5 for rate in quality["native_sample_rate_hz"].values()):
+        raise ValueError("Native G rate below 5 Hz; output resampling cannot qualify the source")
     if session.channel(LAT_G).units.lower() != "g" or session.channel(LONG_G).units.lower() != "g":
         raise ValueError("Acceleration channels must use G units")
     lat, lon = values[:-1].T

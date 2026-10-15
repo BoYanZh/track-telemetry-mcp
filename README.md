@@ -17,8 +17,14 @@ Deterministic motorsports telemetry analysis for MCP agents.
 - slide/spin/off-track reconstruction and standalone HTML replay
 - approximate reference telemetry from calibrated onboard-video overlays
 - agent-oriented capability discovery through `prepare_session`
+- quantitative reference-driver comparison and duration-weighted measured G occupancy
+- TTC adapters for AiM XRK/XRZ, VBOX VBO and RaceChrono CSV, with clock/lap/source semantics
+- source-gated braking efficiency, four-wheel speed indications and steering-to-yaw response
 
 Raw logger telemetry and video-derived pseudo telemetry are intentionally kept separate.
+
+See [quantitative tools and data-quality limits](docs/quantitative-tools.md) for
+input installation, source gates, sampling requirements and measurement semantics.
 
 ## Install
 
