@@ -17,6 +17,7 @@ from .channels import (
     THROTTLE_PCT,
     YAW_RATE_DPS,
 )
+from .alignment import align_laps
 from .controls import select_power_control
 from .geometry import cumulative_distance_m, latlon_to_xy_m
 from .models import Lap, TelemetrySession
@@ -214,25 +215,39 @@ def compare_laps(
     *,
     same_layout_confirmed: bool,
     mini_sectors: int = 20,
+    profile_points: int = 201,
+    include_profile: bool = False,
 ) -> dict[str, Any]:
-    """Compare two laps by normalized GPS distance.
+    """Compare laps at matched physical points on lap B's GPS trace.
 
-    This method is intentionally gated. Normalized distance is invalid for different layouts;
-    callers must explicitly confirm the same physical layout first.
+    Normalized *individual* lap distance introduces phase errors when racing
+    lines differ. This comparison projects lap A to lap B's reference geometry,
+    using time order to disambiguate crossings and start/finish.
     """
     if not same_layout_confirmed:
         raise ValueError(
-            "Normalized-distance comparison requires same_layout_confirmed=True. "
-            "For different layouts, compare shared physical sections aligned by GPS instead."
+            "Physical GPS comparison requires same_layout_confirmed=True. "
+            "Different layouts require shared-section matching."
         )
-    if mini_sectors < 1:
-        raise ValueError("mini_sectors must be positive")
+    if not (1 <= mini_sectors <= 200):
+        raise ValueError("mini_sectors must be between 1 and 200")
+    if not (2 <= profile_points <= 5001):
+        raise ValueError("profile_points must be between 2 and 5001")
 
     lap_a = session_a.lap(lap_a_number)
     lap_b = session_b.lap(lap_b_number)
-    edges = np.linspace(0.0, 1.0, mini_sectors + 1)
-    elapsed_a, distance_a = _elapsed_on_progress(session_a, lap_a, edges)
-    elapsed_b, distance_b = _elapsed_on_progress(session_b, lap_b, edges)
+    aligned = align_laps(
+        session_a,
+        lap_a,
+        session_b,
+        lap_b,
+        grid_points=max(201, mini_sectors * 10 + 1, profile_points if include_profile else 2),
+    )
+    grid = aligned["distance_m"]
+    length = float(grid[-1])
+    edges = np.linspace(0.0, length, mini_sectors + 1)
+    elapsed_a = np.interp(edges, grid, aligned["elapsed_a_s"])
+    elapsed_b = np.interp(edges, grid, aligned["elapsed_b_s"])
     sector_a = np.diff(elapsed_a)
     sector_b = np.diff(elapsed_b)
 
@@ -241,18 +256,46 @@ def compare_laps(
         sectors.append(
             {
                 "sector": i + 1,
-                "start_progress": float(edges[i]),
-                "end_progress": float(edges[i + 1]),
+                "start_progress": float(edges[i] / length),
+                "end_progress": float(edges[i + 1] / length),
                 "lap_a_s": float(sector_a[i]),
                 "lap_b_s": float(sector_b[i]),
                 "a_minus_b_s": float(sector_a[i] - sector_b[i]),
             }
         )
 
-    return {
+    result: dict[str, Any] = {
         "lap_a": lap_a.to_dict(),
         "lap_b": lap_b.to_dict(),
         "lap_a_minus_b_total_s": float(lap_a.duration_s - lap_b.duration_s),
-        "gps_distance_m": {"lap_a": distance_a, "lap_b": distance_b},
+        "gps_distance_m": aligned["gps_path_length_m"],
+        "alignment_quality": aligned["alignment_quality"],
         "mini_sectors": sectors,
     }
+    if include_profile:
+        target = np.linspace(0.0, length, profile_points)
+        t_a = np.interp(target, grid, aligned["elapsed_a_s"])
+        t_b = np.interp(target, grid, aligned["elapsed_b_s"])
+
+        def optional_speed(values: np.ndarray) -> np.ndarray:
+            good = np.isfinite(values)
+            if np.count_nonzero(good) < 2:
+                return np.full_like(target, np.nan)
+            return np.interp(target, grid[good], values[good], left=np.nan, right=np.nan)
+
+        speed_a = optional_speed(aligned["speed_a_kmh"])
+        speed_b = optional_speed(aligned["speed_b_kmh"])
+        result["profile"] = [
+            {
+                "reference_distance_m": float(s),
+                "progress": float(s / length),
+                "lap_a_elapsed_s": float(a),
+                "lap_b_elapsed_s": float(b),
+                "delta_t_s": float(a - b),
+                "lap_a_speed_kmh": float(va) if np.isfinite(va) else None,
+                "lap_b_speed_kmh": float(vb) if np.isfinite(vb) else None,
+                "delta_v_kmh": float(va - vb) if np.isfinite(va) and np.isfinite(vb) else None,
+            }
+            for s, a, b, va, vb in zip(target, t_a, t_b, speed_a, speed_b)
+        ]
+    return result
