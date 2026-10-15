@@ -7,6 +7,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from zipfile import BadZipFile
 
 import numpy as np
 from mcp.server import MCPServer
@@ -29,7 +30,7 @@ from .incidents import analyze_incident as incident_metrics
 from .laps import compare_laps as compare_lap_data
 from .laps import fastest_timed_lap, lap_summary, section_metrics
 from .models import TelemetrySession
-from .motec_adapter import load_rcz
+from .motec_adapter import discover_rcz_stints, load_all_rcz_stints
 from .reference_video import (
     extract_reference_telemetry,
     load_overlay_config,
@@ -126,7 +127,7 @@ def _resolve_rcz(raw_path: str) -> Path:
 @lru_cache(maxsize=8)
 def _load_cached(path: str, mtime_ns: int) -> TelemetrySession:
     del mtime_ns
-    return load_rcz(path)
+    return load_all_rcz_stints(path)
 
 
 def _load(raw_path: str) -> TelemetrySession:
@@ -202,6 +203,9 @@ def _prepare_session_data(session: TelemetrySession) -> dict[str, Any]:
         "session_id": session.session_id,
         "source_name": Path(session.source).name,
         "fastest_timed_lap_number": pb.number if pb is not None else None,
+        "fastest_timed_lap_stint": pb.stint if pb is not None else None,
+        "fastest_timed_lap_original_number": pb.original_number if pb is not None else None,
+        "stints": session.metadata.get("stints", []),
         "timed_lap_numbers": [lap.number for lap in session.laps if lap.is_timed],
         "capabilities": capabilities,
         "recommended_tools": recommended,
@@ -245,16 +249,23 @@ def _list_sessions_data() -> dict[str, Any]:
             "sessions": [],
             "reason": "Session discovery requires TRACK_TELEMETRY_ROOT.",
         }
-    sessions = [
-        {
+    sessions = []
+    for session_id, path in sorted(
+        _session_index().items(),
+        key=lambda item: item[1].relative_to(root).as_posix().lower(),
+    ):
+        item: dict[str, Any] = {
             "session_id": session_id,
             "source_name": path.name,
         }
-        for session_id, path in sorted(
-            _session_index().items(),
-            key=lambda item: item[1].relative_to(root).as_posix().lower(),
-        )
-    ]
+        try:
+            item["stints"] = discover_rcz_stints(path)
+        except (ValueError, OSError, BadZipFile):
+            # Keep file discovery robust even if a recording is incomplete.
+            # Detailed errors are surfaced by prepare_session/inspect_session.
+            item["stints"] = []
+            item["inspection_error"] = "RCZ metadata unreadable"
+        sessions.append(item)
     return {
         "discovery_available": True,
         "session_count": len(sessions),
@@ -264,7 +275,7 @@ def _list_sessions_data() -> dict[str, Any]:
 
 @mcp.tool()
 def list_sessions() -> dict[str, Any]:
-    """Discover RCZ sessions under TRACK_TELEMETRY_ROOT without exposing absolute paths."""
+    """Discover RCZ recordings and their available stints without exposing host paths."""
     return _list_sessions_data()
 
 
@@ -286,7 +297,7 @@ def inspect_session(path: str) -> dict[str, Any]:
 
 @mcp.tool()
 def prepare_session(path: str) -> dict[str, Any]:
-    """Prepare an agent to analyze one RCZ session with minimal tool calls.
+    """Prepare all stints in an RCZ recording with global RaceChrono lap numbers.
 
     Use after list_sessions when the agent needs a concise PB/lap/capability summary.
     The returned recommended_tools are availability hints, not an instruction to call all
@@ -297,7 +308,7 @@ def prepare_session(path: str) -> dict[str, Any]:
 
 @mcp.tool()
 def list_laps(path: str) -> dict[str, Any]:
-    """List laps and PB for a selected RCZ session.
+    """List all stints and original lap numbers across the entire RCZ recording.
 
     Use when lap selection matters. Prefer inspect_session/prepare_session first when the
     agent has not yet checked available channels or analysis capabilities.
@@ -307,6 +318,8 @@ def list_laps(path: str) -> dict[str, Any]:
     return {
         "session_id": session.session_id,
         "fastest_timed_lap_number": pb.number if pb is not None else None,
+        "fastest_timed_lap_stint": pb.stint if pb is not None else None,
+        "stints": session.metadata.get("stints", []),
         "laps": [lap.to_dict() for lap in session.laps],
     }
 
