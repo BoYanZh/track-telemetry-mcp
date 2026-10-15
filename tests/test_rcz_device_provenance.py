@@ -114,6 +114,12 @@ def test_multi_stint_provenance_and_imu_channels(tmp_path: Path) -> None:
     assert session.metadata["channel_provenance_by_stint"][0][VERT_G] == (
         "rcz_accelerometer_2_101"
     )
+    assert session.metadata["channel_provenance_by_stint"][1]["engine_rpm"] == (
+        "rcz_can_12_200_pid_10024"
+    )
+    assert session.metadata["channel_provenance_by_stint"][0][YAW_RATE_DPS] == (
+        "rcz_gyro_3_102"
+    )
     for channel, expected in ((LAT_G, 0.7), (LONG_G, -0.25), (VERT_G, 0.97), (YAW_RATE_DPS, 12)):
         assert channel in session.channels
         assert np.nanmedian(session.channel(channel).values) == pytest.approx(expected, abs=1e-3)
