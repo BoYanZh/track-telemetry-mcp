@@ -28,6 +28,11 @@ from .geometry import (
 from .models import TelemetrySession
 
 
+# Unknown metadata is not proof that yaw rate was measured independently.
+def yaw_is_independent(source: str) -> bool:
+    return source in {"can", "imu"} or source.startswith(("rcz_can_", "rcz_gyro_"))
+
+
 def _travel_heading(
     session: TelemetrySession,
     timestamps_s: np.ndarray,
@@ -80,10 +85,10 @@ def analyze_slip_angle(
         raise ValueError("heading_half_window must be positive")
 
     yaw_source = str(session.metadata.get("yaw_rate_source", "unknown"))
-    if yaw_source == "gps_heading_derivative" and not allow_gps_derived_yaw:
+    if not yaw_is_independent(yaw_source) and not allow_gps_derived_yaw:
         raise ValueError(
-            "Slip-angle proxy requires yaw rate independent of GPS course. "
-            "This session's yaw_rate_source is gps_heading_derivative."
+            "Slip-angle proxy requires verified yaw rate independent of GPS course. "
+            f"Got yaw_rate_source={yaw_source!r}."
         )
 
     lat_ch = session.channel(GPS_LATITUDE_DEG)
@@ -117,6 +122,8 @@ def analyze_slip_angle(
     )
     yaw = yaw_ch.interp(t)
     speed = speed_ch.interp(t)
+    if not np.all(np.isfinite(yaw)):
+        raise ValueError("Yaw rate has missing samples in the requested window; cannot integrate heading")
 
     anchor_time = float(start_s if anchor_s is None else anchor_s)
     anchor_i = int(np.argmin(np.abs(t - anchor_time)))
@@ -128,7 +135,7 @@ def analyze_slip_angle(
 
     body = integrate_body_heading_deg(
         t,
-        np.nan_to_num(yaw, nan=0.0),
+        yaw,
         float(travel[anchor_i]),
         anchor_index=anchor_i,
         yaw_sign=yaw_sign,

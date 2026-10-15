@@ -6,14 +6,17 @@ from typing import Any
 
 import numpy as np
 
+from .alignment import align_laps
 from .channels import (
     ACCELERATOR_PCT,
+    BRAKE_POS_PCT,
     BRAKE_PRESSURE_KPA,
     GPS_LATITUDE_DEG,
     GPS_LONGITUDE_DEG,
     LAT_G,
     LONG_G,
     SPEED_KMH,
+    STEERING_DEG,
     THROTTLE_PCT,
     YAW_RATE_DPS,
 )
@@ -195,13 +198,87 @@ def section_metrics(
             result["exit_accelerator_pct"] = exit_control
             result["full_accelerator_reapply_progress"] = reapply_progress
 
-    if session.optional_channel(BRAKE_PRESSURE_KPA) is not None:
-        brake = _channel_on_progress(session, lap, BRAKE_PRESSURE_KPA, grid)
-        result["peak_brake_pressure_kpa"] = (
-            float(np.nanmax(brake)) if np.any(np.isfinite(brake)) else None
-        )
-        onset = np.flatnonzero(brake >= 100.0)
-        result["brake_onset_progress"] = float(grid[onset[0]]) if len(onset) else None
+    # Event order matters more for coaching than isolated peak values.
+    timeline: dict[str, float | str | None] = {
+        "brake_onset_progress": None,
+        "peak_brake_progress": None,
+        "brake_release_start_progress": None,
+        "brake_end_progress": None,
+        "steering_onset_progress": None,
+        "steering_unwind_progress": None,
+        "first_power_reapply_progress": None,
+        "full_power_reapply_progress": result.get("full_control_reapply_progress"),
+        "brake_steering_overlap_fraction": None,
+        "brake_control_source": None,
+    }
+    brake_channel = session.optional_channel(BRAKE_PRESSURE_KPA)
+    brake_name = BRAKE_PRESSURE_KPA
+    brake_threshold = 100.0
+    if brake_channel is None:
+        brake_channel = session.optional_channel(BRAKE_POS_PCT)
+        brake_name = BRAKE_POS_PCT
+        brake_threshold = 3.0
+    brake_active = np.zeros(len(grid), dtype=bool)
+    if brake_channel is not None:
+        brake = _channel_on_progress(session, lap, brake_name, grid)
+        brake_active = np.isfinite(brake) & (brake >= brake_threshold)
+        timeline["brake_control_source"] = brake_name
+        onset = np.flatnonzero(brake_active)
+        if len(onset):
+            onset_i = int(onset[0])
+            timeline["brake_onset_progress"] = float(grid[onset_i])
+            result["brake_onset_progress"] = float(grid[onset_i])
+            finite_after = np.where(np.isfinite(brake[onset_i:]), brake[onset_i:], -np.inf)
+            peak_i = onset_i + int(np.argmax(finite_after))
+            timeline["peak_brake_progress"] = float(grid[peak_i])
+            # Event boundaries below are threshold crossings after peak pressure.
+            release = np.flatnonzero(
+                np.isfinite(brake[peak_i:]) & (brake[peak_i:] <= 0.9 * brake[peak_i])
+            )
+            if len(release):
+                timeline["brake_release_start_progress"] = float(grid[peak_i + release[0]])
+            finished = np.flatnonzero(
+                np.isfinite(brake[peak_i:]) & (brake[peak_i:] < brake_threshold)
+            )
+            if len(finished):
+                timeline["brake_end_progress"] = float(grid[peak_i + finished[0]])
+        if brake_name == BRAKE_PRESSURE_KPA:
+            result["peak_brake_pressure_kpa"] = _safe_stat(brake, "max")
+        else:
+            result["peak_brake_position_pct"] = _safe_stat(brake, "max")
+
+    steering_ch = session.optional_channel(STEERING_DEG)
+    if steering_ch is not None:
+        steering = _channel_on_progress(session, lap, STEERING_DEG, grid)
+        steering_abs = np.abs(steering)
+        active = np.isfinite(steering_abs) & (steering_abs >= 10.0)
+        onset = np.flatnonzero(active)
+        if len(onset):
+            timeline["steering_onset_progress"] = float(grid[onset[0]])
+            peak_i = int(np.nanargmax(steering_abs))
+            lower = np.flatnonzero(
+                np.isfinite(steering_abs[peak_i:])
+                & (steering_abs[peak_i:] <= 0.5 * steering_abs[peak_i])
+            )
+            if len(lower):
+                timeline["steering_unwind_progress"] = float(grid[peak_i + lower[0]])
+            if brake_channel is not None:
+                timeline["brake_steering_overlap_fraction"] = float(np.mean(active & brake_active))
+
+    if control_source is not None and control_channel is not None:
+        control = _channel_on_progress(session, lap, control_source, grid)
+        valid = control[np.isfinite(control)]
+        if len(valid):
+            # A modest rise after vmin is distinct from reaching >=90% power control.
+            threshold = min(90.0, float(np.nanmin(valid)) + 10.0)
+            first = np.flatnonzero(
+                (np.arange(len(grid)) >= min_i)
+                & np.isfinite(control)
+                & (control >= threshold)
+            )
+            if len(first):
+                timeline["first_power_reapply_progress"] = float(grid[first[0]])
+    result["driver_input_timeline"] = timeline
 
     return result
 
@@ -214,25 +291,39 @@ def compare_laps(
     *,
     same_layout_confirmed: bool,
     mini_sectors: int = 20,
+    profile_points: int = 201,
+    include_profile: bool = False,
 ) -> dict[str, Any]:
-    """Compare two laps by normalized GPS distance.
+    """Compare laps at matched physical points on lap B's GPS trace.
 
-    This method is intentionally gated. Normalized distance is invalid for different layouts;
-    callers must explicitly confirm the same physical layout first.
+    Normalized *individual* lap distance introduces phase errors when racing
+    lines differ. This comparison projects lap A to lap B's reference geometry,
+    using time order to disambiguate crossings and start/finish.
     """
     if not same_layout_confirmed:
         raise ValueError(
-            "Normalized-distance comparison requires same_layout_confirmed=True. "
-            "For different layouts, compare shared physical sections aligned by GPS instead."
+            "Physical GPS comparison requires same_layout_confirmed=True. "
+            "Different layouts require shared-section matching."
         )
-    if mini_sectors < 1:
-        raise ValueError("mini_sectors must be positive")
+    if not (1 <= mini_sectors <= 200):
+        raise ValueError("mini_sectors must be between 1 and 200")
+    if not (2 <= profile_points <= 5001):
+        raise ValueError("profile_points must be between 2 and 5001")
 
     lap_a = session_a.lap(lap_a_number)
     lap_b = session_b.lap(lap_b_number)
-    edges = np.linspace(0.0, 1.0, mini_sectors + 1)
-    elapsed_a, distance_a = _elapsed_on_progress(session_a, lap_a, edges)
-    elapsed_b, distance_b = _elapsed_on_progress(session_b, lap_b, edges)
+    aligned = align_laps(
+        session_a,
+        lap_a,
+        session_b,
+        lap_b,
+        grid_points=max(201, mini_sectors * 10 + 1, profile_points if include_profile else 2),
+    )
+    grid = aligned["distance_m"]
+    length = float(grid[-1])
+    edges = np.linspace(0.0, length, mini_sectors + 1)
+    elapsed_a = np.interp(edges, grid, aligned["elapsed_a_s"])
+    elapsed_b = np.interp(edges, grid, aligned["elapsed_b_s"])
     sector_a = np.diff(elapsed_a)
     sector_b = np.diff(elapsed_b)
 
@@ -241,18 +332,46 @@ def compare_laps(
         sectors.append(
             {
                 "sector": i + 1,
-                "start_progress": float(edges[i]),
-                "end_progress": float(edges[i + 1]),
+                "start_progress": float(edges[i] / length),
+                "end_progress": float(edges[i + 1] / length),
                 "lap_a_s": float(sector_a[i]),
                 "lap_b_s": float(sector_b[i]),
                 "a_minus_b_s": float(sector_a[i] - sector_b[i]),
             }
         )
 
-    return {
+    result: dict[str, Any] = {
         "lap_a": lap_a.to_dict(),
         "lap_b": lap_b.to_dict(),
         "lap_a_minus_b_total_s": float(lap_a.duration_s - lap_b.duration_s),
-        "gps_distance_m": {"lap_a": distance_a, "lap_b": distance_b},
+        "gps_distance_m": aligned["gps_path_length_m"],
+        "alignment_quality": aligned["alignment_quality"],
         "mini_sectors": sectors,
     }
+    if include_profile:
+        target = np.linspace(0.0, length, profile_points)
+        t_a = np.interp(target, grid, aligned["elapsed_a_s"])
+        t_b = np.interp(target, grid, aligned["elapsed_b_s"])
+
+        def optional_speed(values: np.ndarray) -> np.ndarray:
+            good = np.isfinite(values)
+            if np.count_nonzero(good) < 2:
+                return np.full_like(target, np.nan)
+            return np.interp(target, grid[good], values[good], left=np.nan, right=np.nan)
+
+        speed_a = optional_speed(aligned["speed_a_kmh"])
+        speed_b = optional_speed(aligned["speed_b_kmh"])
+        result["profile"] = [
+            {
+                "reference_distance_m": float(s),
+                "progress": float(s / length),
+                "lap_a_elapsed_s": float(a),
+                "lap_b_elapsed_s": float(b),
+                "delta_t_s": float(a - b),
+                "lap_a_speed_kmh": float(va) if np.isfinite(va) else None,
+                "lap_b_speed_kmh": float(vb) if np.isfinite(vb) else None,
+                "delta_v_kmh": float(va - vb) if np.isfinite(va) and np.isfinite(vb) else None,
+            }
+            for s, a, b, va, vb in zip(target, t_a, t_b, speed_a, speed_b)
+        ]
+    return result

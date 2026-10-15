@@ -7,6 +7,8 @@ from typing import Any
 
 import numpy as np
 
+from .channels import GPS_HEADING_DEG
+
 
 @dataclass(frozen=True)
 class Lap:
@@ -74,6 +76,10 @@ class ChannelSeries:
         src_v = self.values[valid]
         if len(src_t) == 1:
             return np.full_like(target, src_v[0], dtype=np.float64)
+        if self.name == GPS_HEADING_DEG:
+            # Compass bearings wrap at 360 degrees.
+            unwrapped = np.rad2deg(np.unwrap(np.deg2rad(src_v)))
+            return np.mod(np.interp(target, src_t, unwrapped, left=np.nan, right=np.nan), 360.0)
         return np.interp(target, src_t, src_v, left=np.nan, right=np.nan)
 
 
