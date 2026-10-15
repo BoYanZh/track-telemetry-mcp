@@ -17,7 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 rcz = [
-  "track-telemetry-converter @ git+https://github.com/BoYanZh/TrackTelemetryConverter.git@9eb3ef97166fc7f75512be7962572d8b86d3dafa",
+  "track-telemetry-converter @ git+https://github.com/BoYanZh/TrackTelemetryConverter.git@309c62039ab87aeddc7b6e2dc0c02cb5127e998f",
 ]
 video = [
   "opencv-python-headless>=4.10",
