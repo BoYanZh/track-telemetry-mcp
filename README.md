@@ -145,7 +145,7 @@ All RCZ-backed tools keep the `path` parameter for compatibility. With a telemet
 
 ### Multiple RaceChrono stints
 
-RCZ files can contain `resume_1/`, `resume_2/`, etc. The MCP reads all recorded stints by default, retains their physical acquisition time offsets, and exposes the original RaceChrono lap numbers across the day. `list_sessions` shows the available stints, and `prepare_session`/`list_laps` include `stint` alongside each lap and report the overall fastest timed lap. A normal recording containing original lap 22 in stint 3 is addressed simply with `analyze_lap(path, 22)` or `compare_laps(..., lap_b=22, ...)`.
+RCZ files can contain `resume_1/`, `resume_2/`, etc. The MCP reads all recorded stints by default, retains their physical acquisition time offsets, and exposes the original RaceChrono lap numbers across the day. `prepare_session(path, stint=3)`, `inspect_session(path, stint=3)`, or `list_laps(path, stint=3)` can restrict discovery to one stint; omit the parameter or use `stint="all"` to inspect the whole recording. `list_sessions` shows the available stints, and `prepare_session`/`list_laps` include `stint` alongside each lap and report the overall fastest timed lap. A normal recording containing original lap 22 in stint 3 is addressed simply with `analyze_lap(path, 22)` or `compare_laps(..., lap_b=22, ...)`.
 
 When the source repeats the same original lap number in multiple stints, the MCP uses composite unique lap IDs (e.g., `3000007` for original lap 7 in stint 2) and keeps both `original_number` and `stint` visible; use the exposed `number` as the selector. Synthetic untimed out-lap IDs may be negative. The low-level `load_rcz(path, target_stint=N)` API remains available for callers needing a single stint.
 
