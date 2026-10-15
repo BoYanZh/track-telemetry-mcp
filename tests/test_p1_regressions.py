@@ -126,7 +126,7 @@ def test_unknown_yaw_is_not_claimed_as_independent() -> None:
     caps = _session_capabilities(session)
     assert caps["tool_support"]["analyze_slip_angle"] is False
     assert caps["tool_support"]["analyze_incident"] is False
-    with pytest.raises(ValueError, match="verified yaw"):
+    with pytest.raises(ValueError, match="verified independent yaw"):
         analyze_incident(session, 0.0, 4.0)
     with pytest.raises(ValueError, match="verified yaw rate"):
         analyze_slip_angle(session, 0.0, 4.0)
