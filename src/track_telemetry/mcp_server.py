@@ -19,6 +19,7 @@ from .channels import (
     BRAKE_PRESSURE_KPA,
     GPS_LATITUDE_DEG,
     GPS_LONGITUDE_DEG,
+    LAT_G,
     LONG_G,
     SPEED_KMH,
     STEERING_DEG,
@@ -33,6 +34,7 @@ from .laps import compare_laps as compare_lap_data
 from .laps import fastest_timed_lap, lap_summary, section_metrics
 from .models import TelemetrySession
 from .motec_adapter import discover_rcz_stints, load_all_rcz_stints
+from .quality import channel_source, measured_source, native_rate
 from .reference import compare_reference_laps as reference_metrics
 from .reference_video import (
     extract_reference_telemetry,
@@ -44,6 +46,18 @@ from .report_plots import render_session_report as session_figures
 from .slip_angle import analyze_slip_angle as slip_angle_metrics
 from .slip_angle import yaw_is_independent
 from .ttc_adapter import SUPPORTED_SUFFIXES, load_telemetry
+from .vehicle_response import (
+    WHEELS,
+)
+from .vehicle_response import (
+    analyze_braking_efficiency as braking_efficiency_metrics,
+)
+from .vehicle_response import (
+    analyze_steering_response as steering_response_metrics,
+)
+from .vehicle_response import (
+    analyze_wheel_speeds as wheel_speed_metrics,
+)
 from .visualization import write_incident_html
 
 mcp = MCPServer("track-telemetry")
@@ -221,7 +235,31 @@ def _session_capabilities(session: TelemetrySession) -> dict[str, Any]:
         "analyze_slip_angle": has_gps_trace and has_speed and independent_yaw,
         "analyze_incident": has_gps_trace and has_speed and independent_yaw,
         "compare_laps": bool(timed_laps) and has_gps_trace,
+        "compare_reference_laps": bool(timed_laps) and has_gps_trace,
     }
+    def verified(names: tuple[str, ...], min_native_hz: float | None = None) -> bool:
+        return bool(timed_laps) and all(name in channels for name in names) and all(
+            measured_source(channel_source(session, name, lap.number)) and
+            (min_native_hz is None or (native_rate(session, name, lap.number) or 0) >= min_native_hz)
+            for lap in timed_laps for name in names
+        )
+
+    def rate_available(names: tuple[str, ...], minimum: float) -> bool:
+        return bool(timed_laps) and all(
+            (native_rate(session, name, lap.number) or 0) >= minimum
+            for lap in timed_laps for name in names
+        )
+
+    brake_names = (BRAKE_PRESSURE_KPA,) if BRAKE_PRESSURE_KPA in channels else (BRAKE_POS_PCT,)
+    tool_support.update({
+        "analyze_gg_usage": verified((LAT_G, LONG_G)) and all(
+            (native_rate(session, name, lap.number) is None or
+             native_rate(session, name, lap.number) >= 5)
+            for lap in timed_laps for name in (LAT_G, LONG_G)),
+        "analyze_braking_efficiency": has_speed and verified((LONG_G, *brake_names), 5) and rate_available((SPEED_KMH,), 5),
+        "analyze_wheel_speeds": has_speed and verified(WHEELS, 20) and verified((*brake_names, LAT_G), 10) and rate_available((SPEED_KMH,), 10),
+        "analyze_steering_response": has_speed and verified((STEERING_DEG, YAW_RATE_DPS), 10) and independent_yaw and rate_available((SPEED_KMH,), 5),
+    })
     reasons: dict[str, str] = {}
     requirements = {
         "analyze_lap": "requires at least one timed lap",
@@ -232,6 +270,11 @@ def _session_capabilities(session: TelemetrySession) -> dict[str, Any]:
         ),
         "analyze_incident": "requires GPS latitude/longitude, speed, and verified independent yaw rate",
         "compare_laps": "requires timed laps and GPS latitude/longitude",
+        "compare_reference_laps": "requires timed laps and GPS latitude/longitude; confirm same layout",
+        "analyze_gg_usage": "requires timed laps and verified measured lateral/longitudinal G",
+        "analyze_braking_efficiency": "requires timed laps, speed, measured G/brake and verified native rates >=5 Hz",
+        "analyze_wheel_speeds": "requires timed laps, speed/lateral G/brake at native >=10 Hz and measured wheels at native >=20 Hz",
+        "analyze_steering_response": "requires timed laps, native speed >=5 Hz and measured steering/independent yaw at native >=10 Hz",
     }
     for tool_name, supported in tool_support.items():
         if not supported:
@@ -242,6 +285,7 @@ def _session_capabilities(session: TelemetrySession) -> dict[str, Any]:
         "yaw_rate_source": yaw_source,
         "tool_support": tool_support,
         "unsupported_reasons": reasons,
+        "availability_note": "Availability is a prerequisite hint; per-lap units, coverage, matching and excitation gates still apply.",
     }
 
 
@@ -249,7 +293,9 @@ def _prepare_session_data(session: TelemetrySession) -> dict[str, Any]:
     pb = fastest_timed_lap(session)
     capabilities = _session_capabilities(session)
     general_order = ["analyze_lap", "compare_laps", "analyze_section"]
-    specialized_order = ["analyze_braking", "analyze_slip_angle", "analyze_incident"]
+    specialized_order = ["analyze_braking", "analyze_slip_angle", "analyze_incident",
+                         "compare_reference_laps", "analyze_gg_usage", "analyze_braking_efficiency",
+                         "analyze_wheel_speeds", "analyze_steering_response"]
     recommended = [
         name for name in general_order if capabilities["tool_support"].get(name, False)
     ]
@@ -364,6 +410,8 @@ def inspect_session(path: str, stint: int | str = "all") -> dict[str, Any]:
         "their sample_rate_hz is not necessarily the CAN/IMU acquisition rate. "
         "Device model codes are not verified hardware-brand names."
     )
+    if Path(session.source).suffix.lower() != ".rcz":
+        result["native_sampling_note"] = session.metadata.get("sampling_note", "Native acquisition rate unverified")
     return result
 
 
@@ -493,6 +541,38 @@ def analyze_incident(
         include_samples=include_samples,
         sample_stride=sample_stride,
     )
+
+
+@mcp.tool()
+def analyze_braking_efficiency(path: str, lap_number: int) -> dict[str, Any]:
+    """Measure braking distance, speed loss, effective deceleration and brake integral.
+
+    Requires measured G/brake, speed and matched interval coverage. Returns
+    descriptive measurements, not a friction-limit efficiency score.
+    """
+    return braking_efficiency_metrics(_load(path), lap_number)
+
+
+@mcp.tool()
+def analyze_wheel_speeds(path: str, lap_number: int) -> dict[str, Any]:
+    """Measure four-wheel spread and sustained straight-braking speed-deficit proxies.
+
+    Requires verified native wheel rates >=20 Hz. Resampled Hz is insufficient.
+    ABS remains unconfirmed without direct status; no tire slip ratio is claimed.
+    """
+    return wheel_speed_metrics(_load(path), lap_number)
+
+
+@mcp.tool()
+def analyze_steering_response(path: str, lap_number: int,
+                              start_s: float | None = None, end_s: float | None = None) -> dict[str, Any]:
+    """Measure signed steering/yaw gain and 0-0.5 s correlation delay.
+
+    Requires independent measured yaw/steering at native >=10 Hz, a continuous
+    matched clock, excitation and limited speed variation. No understeer diagnosis.
+    Select a stable-speed maneuver with session-clock start_s/end_s inside the lap.
+    """
+    return steering_response_metrics(_load(path), lap_number, start_s=start_s, end_s=end_s)
 
 
 @mcp.tool()
