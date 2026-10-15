@@ -194,10 +194,17 @@ def load_all_rcz_stints(path: str | Path) -> TelemetrySession:
 
     for stint, origin_ms, session in parts:
         offset_s = (origin_ms - first_origin_ms) / 1000.0
+        active_channels = [
+            channel for channel in session.channels.values() if len(channel.timestamps)
+        ]
+        if not active_channels:
+            raise ValueError(f"RCZ stint {stint} has no usable channel samples")
         stint_info.append(
             {
                 "stint": stint,
                 "time_origin_epoch_ms": origin_ms,
+                "start_s": offset_s + min(ch.timestamps[0] for ch in active_channels),
+                "end_s": offset_s + max(ch.timestamps[-1] for ch in active_channels),
                 "lap_count": len(session.laps),
                 "timed_lap_count": sum(lap.is_timed for lap in session.laps),
             }
