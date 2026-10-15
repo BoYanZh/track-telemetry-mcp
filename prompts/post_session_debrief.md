@@ -21,6 +21,14 @@ Summarize:
 4. Find the 2-3 most repeatable improvements and the 1-2 persistent weaknesses.
 5. Do not create a long modification list. Keep the focus on driver learning unless telemetry clearly indicates a reliability/data-quality issue.
 
+## Figures
+
+For quantitative same-layout before/after lap comparisons, generate the
+P1 GPS, V-S and Delta-T figures when available. Select P2 G, inputs and
+health plots only when they answer an identified diagnostic question.
+State missing/sparse channels and do not mistake interpolated GPS for
+higher-rate logger samples. Follow skill/SKILL.md.
+
 ## Output
 
 ### Session result
