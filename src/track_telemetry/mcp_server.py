@@ -27,11 +27,13 @@ from .channels import (
     YAW_RATE_DPS,
 )
 from .geometry import latlon_to_xy_m
+from .gg import analyze_gg_usage as gg_metrics
 from .incidents import analyze_incident as incident_metrics
 from .laps import compare_laps as compare_lap_data
 from .laps import fastest_timed_lap, lap_summary, section_metrics
 from .models import TelemetrySession
 from .motec_adapter import discover_rcz_stints, load_all_rcz_stints
+from .reference import compare_reference_laps as reference_metrics
 from .reference_video import (
     extract_reference_telemetry,
     load_overlay_config,
@@ -483,6 +485,30 @@ def analyze_incident(
         include_samples=include_samples,
         sample_stride=sample_stride,
     )
+
+
+@mcp.tool()
+def analyze_gg_usage(path: str, lap_number: int) -> dict[str, Any]:
+    """Measure time-weighted recorded G occupancy and observed envelope on a timed lap.
+
+    Requires verified measured G sources and >=80% matched interval coverage.
+    This does not estimate available tire grip or a friction-circle utilization percent.
+    """
+    return gg_metrics(_load(path), lap_number)
+
+
+@mcp.tool()
+def compare_reference_laps(
+    driver_path: str, driver_lap: int, reference_path: str, reference_lap: int,
+    same_layout_confirmed: bool = False, mini_sectors: int = 20,
+) -> dict[str, Any]:
+    """Compare a driver to a raw reference lap using physical GPS alignment.
+
+    Positive delta means driver slower. Confirm layout independently. Vehicle,
+    tires and conditions remain confounders; optional G metrics fail independently.
+    """
+    return reference_metrics(_load(driver_path), driver_lap, _load(reference_path), reference_lap,
+                             same_layout_confirmed=same_layout_confirmed, mini_sectors=mini_sectors)
 
 
 @mcp.tool()
