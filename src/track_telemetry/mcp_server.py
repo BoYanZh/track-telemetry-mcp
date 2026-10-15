@@ -160,9 +160,23 @@ def _load(raw_path: str, stint: int | str = "all") -> TelemetrySession:
     metadata["target_stint"] = selected
     metadata["stints"] = [info]
     metadata["stint_count"] = 1
-    metadata["yaw_rate_source"] = session.metadata.get(
-        "yaw_rate_source_by_stint", {}
-    ).get(selected, "unknown")
+    metadata["device_summary_by_stint"] = [
+        item for item in metadata.get("device_summary_by_stint", [])
+        if item["stint"] == selected
+    ]
+    metadata["channel_provenance_by_stint"] = {
+        selected: metadata.get("channel_provenance_by_stint", {}).get(selected, {})
+    }
+    for source_key in (
+        "gps_source",
+        "lateral_accel_source",
+        "longitudinal_accel_source",
+        "vertical_accel_source",
+        "yaw_rate_source",
+    ):
+        metadata[source_key] = session.metadata.get(
+            f"{source_key}_by_stint", {}
+        ).get(selected, "unknown")
     return TelemetrySession(
         session_id=session.session_id,
         source=session.source,
