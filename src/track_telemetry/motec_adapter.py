@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+from collections import Counter
+import json
 from pathlib import Path
+import re
 from typing import Any
+import zipfile
+
+import numpy as np
 
 from . import channels as out
 from .models import ChannelSeries, Lap, TelemetrySession
@@ -110,4 +116,160 @@ def load_rcz(
         metadata=metadata,
         laps=laps,
         channels=normalized,
+    )
+
+
+
+def discover_rcz_stints(path: str | Path) -> list[dict[str, int]]:
+    """Inspect archive metadata without decoding channels.
+
+    A stint must have recording data. Lap metadata alone is not enough: a
+    partially exported archive can mention stints with no recorded channels.
+    Invalid archives raise an explicit exception rather than silently
+    returning a fictitious stint 0.
+    """
+    source = Path(path).expanduser().resolve()
+    with zipfile.ZipFile(source) as archive:
+        names = archive.namelist()
+        if "session.json" not in names:
+            raise ValueError("Expected a session.json at the root of the RCZ archive")
+        session = json.loads(archive.read("session.json"))
+        if not isinstance(session, dict):
+            raise ValueError("Invalid RaceChrono session.json object")
+        raw_laps = session.get("laps") or []
+        if not isinstance(raw_laps, list):
+            raise ValueError("Invalid RaceChrono laps list")
+        counts: Counter[int] = Counter()
+        for lap in raw_laps:
+            counts[int(lap.get("sessionResume", 0) or 0)] += 1
+        # Use actual channel presence, not just sessionResume in session.json.
+        # TrackTelemetryConverter expects channel streams under resume_N/.
+        recorded: set[int] = set()
+        for name in names:
+            if name.startswith("channel_") and name.endswith("_1_1"):
+                recorded.add(0)
+                continue
+            match = re.fullmatch(r"resume_(\d+)/channel_.*_1_1", name)
+            if match:
+                recorded.add(int(match.group(1)))
+        return [
+            {"stint": stint, "lap_count": counts[stint]}
+            for stint in sorted(recorded)
+        ]
+
+
+def load_all_rcz_stints(path: str | Path) -> TelemetrySession:
+    """Load all RCZ stints onto one monotonic wall-clock-relative time axis.
+
+    The per-stint converter uses a local time origin and renumbers laps. We
+    shift channels and lap boundaries by the real recorder epoch and prefer
+    RaceChrono's original lap numbers for stable all-day selection. Non-timed
+    synthetic out laps receive negative IDs to avoid collisions.
+    """
+    source = Path(path).expanduser().resolve()
+    stints = discover_rcz_stints(source)
+    if not stints:
+        raise ValueError(f"RCZ file contains no recorded stints: {source.name}")
+
+    parts: list[tuple[int, int, TelemetrySession]] = []
+    for description in stints:
+        stint = description["stint"]
+        session = load_rcz(source, target_stint=stint)
+        origin_ms = session.metadata.get("timeOriginEpochMs")
+        if origin_ms is None:
+            raise ValueError(f"Missing recorder epoch for stint {stint}")
+        parts.append((stint, int(origin_ms), session))
+
+    first_origin_ms = min(origin for _, origin, _ in parts)
+    original_counts: Counter[int] = Counter(
+        lap.original_number
+        for _, _, session in parts
+        for lap in session.laps
+        if lap.original_number is not None
+    )
+    used_numbers: set[int] = set()
+    laps: list[Lap] = []
+    series: dict[str, list[ChannelSeries]] = {}
+    stint_info: list[dict[str, Any]] = []
+
+    for stint, origin_ms, session in parts:
+        offset_s = (origin_ms - first_origin_ms) / 1000.0
+        stint_info.append(
+            {
+                "stint": stint,
+                "time_origin_epoch_ms": origin_ms,
+                "lap_count": len(session.laps),
+                "timed_lap_count": sum(lap.is_timed for lap in session.laps),
+            }
+        )
+        for lap in session.laps:
+            original = lap.original_number
+            if original is not None and original > 0 and original_counts[original] == 1:
+                number = original
+            elif original is not None:
+                # A stitched or imported archive can restart numbering per stint.
+                # In that case, preserve the source number separately and expose
+                # an unambiguous composite selector instead.
+                number = (stint + 1) * 1_000_000 + original
+            else:
+                number = -((stint + 1) * 1_000_000 + lap.number)
+            if number in used_numbers:
+                raise ValueError(f"Duplicate normalized lap ID {number}")
+            used_numbers.add(number)
+            laps.append(
+                Lap(
+                    number=number,
+                    label=str(original) if original is not None else lap.label,
+                    kind=lap.kind,
+                    start_s=lap.start_s + offset_s,
+                    end_s=lap.end_s + offset_s,
+                    duration_s=lap.duration_s,
+                    original_number=original,
+                    stint=stint,
+                )
+            )
+        for name, channel in session.channels.items():
+            series.setdefault(name, []).append(
+                ChannelSeries(
+                    name,
+                    channel.units,
+                    channel.timestamps + offset_s,
+                    channel.values.copy(),
+                )
+            )
+
+    channels: dict[str, ChannelSeries] = {}
+    for name, components in series.items():
+        timestamps = np.concatenate([component.timestamps for component in components])
+        values = np.concatenate([component.values for component in components])
+        order = np.argsort(timestamps, kind="stable")
+        channels[name] = ChannelSeries(
+            name, components[0].units, timestamps[order], values[order]
+        )
+
+    metadata = dict(parts[0][2].metadata)
+    metadata.update(
+        {
+            "timeOriginEpochMs": first_origin_ms,
+            "stint_count": len(stint_info),
+            "stints": stint_info,
+        }
+    )
+    sources = {
+        stint: str(session.metadata.get("yaw_rate_source", "unknown"))
+        for stint, _, session in parts
+    }
+    metadata["yaw_rate_source_by_stint"] = sources
+    if len(set(sources.values())) != 1:
+        # Aggregation must not falsely advertise independent yaw for a day
+        # that includes GPS-derived yaw or unknown provenance.
+        metadata["yaw_rate_source"] = "mixed_or_unknown"
+
+    laps.sort(key=lambda lap: (lap.start_s, lap.end_s))
+    return TelemetrySession(
+        session_id=source.stem,
+        source=str(source),
+        metadata=metadata,
+        laps=laps,
+        channels=channels,
     )
