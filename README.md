@@ -8,8 +8,8 @@ Deterministic motorsports telemetry analysis for MCP agents.
 
 - RaceChrono `.rcz` support via [TrackTelemetryConverter](https://github.com/BoYanZh/TrackTelemetryConverter)
 - lap/PB discovery and lap summaries
-- section analysis: entry, minimum, exit speed, braking, and power-control timing
-- same-layout lap comparison with an explicit layout guard
+- section analysis: entry, minimum, exit speed, braking, steering, and power-control event timing
+- same-layout lap comparison aligned by physical GPS position, with alignment-quality guards and optional Delta T/V profile
 - braking analysis with raw vs sustained deceleration
 - bounded vehicle-sideslip proxy using GPS course + independent yaw rate
 - slide/spin/off-track reconstruction and standalone HTML replay
@@ -132,8 +132,8 @@ Treat video-derived telemetry as approximate pseudo telemetry.
 | `inspect_session` | detailed metadata, channels, sample rates | use when evidence quality matters |
 | `list_laps` | detailed lap list | optional after `prepare_session` |
 | `analyze_lap` | whole-lap summary | timed lap required |
-| `analyze_section` | entry/minimum/exit + control timing | normalized distance within one layout |
-| `compare_laps` | mini-sector lap comparison | same physical layout must be confirmed |
+| `analyze_section` | entry/minimum/exit + braking/steering/power event timeline | normalized distance within one layout; threshold-based timing |
+| `compare_laps` | physical-position-aligned mini-sectors; optional sampled Delta T/V profile | same physical layout must be confirmed; GPS alignment must pass quality guards |
 | `analyze_braking` | deceleration and brake events | does not infer ABS from pressure alone |
 | `analyze_slip_angle` | rotation / vehicle-sideslip proxy | independent yaw source required |
 | `analyze_incident` | slide/spin/off-track reconstruction | bounded known incident window |
@@ -203,7 +203,7 @@ uv run ruff check .
 uv run pytest -q
 ```
 
-CI targets Python 3.10 and 3.12.
+CI targets Python 3.10 and 3.12, including RCZ decoding through the pinned Converter dependency using a synthetic archive. Real-world RCZ files are still needed for validation of logger timing and GPS quality.
 
 Raw `.rcz`, MoTeC files, video, and personal telemetry should not be committed.
 
@@ -212,6 +212,8 @@ Raw `.rcz`, MoTeC files, video, and personal telemetry should not be committed.
 - local file-backed RCZ/video input only
 - no automatic named-corner database
 - different-layout shared-corner matching is still a workflow rule, not an automatic matcher
+- aligned Delta T/V uses lap B as a physical reference path; inadequate GPS agreement fails explicitly
+- section event markers use fixed thresholds, not a vehicle dynamics model; verify against video
 - reference-video extraction currently covers analog speed + overlay map position
 - sideslip/body heading depends on yaw-source quality, anchor quality, and integration drift
 
