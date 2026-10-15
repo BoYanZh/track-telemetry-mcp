@@ -148,11 +148,11 @@ def _load(raw_path: str, stint: int | str = "all") -> TelemetrySession:
     if not matching:
         raise ValueError(f"Stint {selected} is not present in this RCZ recording")
     info = matching[0]
-    channels = {
-        name: sliced
-        for name, channel in session.channels.items()
-        if len(sliced := channel.slice(info["start_s"], info["end_s"]).timestamps)
-    }
+    channels = {}
+    for name, channel in session.channels.items():
+        sliced = channel.slice(info["start_s"], info["end_s"])
+        if len(sliced.timestamps):
+            channels[name] = sliced
     metadata = dict(session.metadata)
     metadata["target_stint"] = selected
     metadata["stints"] = [info]
