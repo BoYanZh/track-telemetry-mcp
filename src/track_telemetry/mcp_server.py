@@ -36,6 +36,7 @@ from .reference_video import (
     write_reference_csv,
 )
 from .slip_angle import analyze_slip_angle as slip_angle_metrics
+from .slip_angle import yaw_is_independent
 from .visualization import write_incident_html
 
 mcp = MCPServer("track-telemetry")
@@ -142,7 +143,7 @@ def _session_capabilities(session: TelemetrySession) -> dict[str, Any]:
     has_yaw = YAW_RATE_DPS in channels
     has_brake_control = BRAKE_PRESSURE_KPA in channels or BRAKE_POS_PCT in channels
     has_power_control = THROTTLE_PCT in channels or ACCELERATOR_PCT in channels
-    independent_yaw = has_yaw and yaw_source != "gps_heading_derivative"
+    independent_yaw = has_yaw and yaw_is_independent(yaw_source)
 
     channel_capabilities = {
         "timed_laps": bool(timed_laps),
@@ -160,7 +161,7 @@ def _session_capabilities(session: TelemetrySession) -> dict[str, Any]:
         "analyze_section": bool(timed_laps) and has_gps_trace and has_speed,
         "analyze_braking": LONG_G in channels,
         "analyze_slip_angle": has_gps_trace and has_speed and independent_yaw,
-        "analyze_incident": has_gps_trace and has_speed and has_yaw,
+        "analyze_incident": has_gps_trace and has_speed and independent_yaw,
         "compare_laps": bool(timed_laps) and has_gps_trace,
     }
     reasons: dict[str, str] = {}
@@ -171,7 +172,7 @@ def _session_capabilities(session: TelemetrySession) -> dict[str, Any]:
         "analyze_slip_angle": (
             "requires GPS latitude/longitude, speed, and yaw rate independent of GPS course"
         ),
-        "analyze_incident": "requires GPS latitude/longitude, speed, and yaw rate",
+        "analyze_incident": "requires GPS latitude/longitude, speed, and verified independent yaw rate",
         "compare_laps": "requires timed laps and GPS latitude/longitude",
     }
     for tool_name, supported in tool_support.items():
