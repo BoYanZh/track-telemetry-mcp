@@ -252,6 +252,45 @@ def inspect_rcz_devices(path: str | Path) -> list[dict[str, Any]]:
     return inventories
 
 
+def _channel_sources_for_stint(
+    session: TelemetrySession, device_summary: dict[str, Any]
+) -> dict[str, str]:
+    """Label canonical channels by measured RCZ source, including CAN PID."""
+    mc, _ = _motec_dependencies()
+    source_by_name: dict[str, str] = {}
+    can_to_normalized = _channel_map(mc)
+    for device in device_summary.get("devices", []):
+        if device["role"] != "can_obd":
+            continue
+        dev_id = device["device_id"]
+        for key in device.get("native_can_pid_rates", {}):
+            pid = key.removeprefix("pid_")
+            pid_map = mc.RCZ_PID_MAP.get(pid)
+            if pid_map is None:
+                continue
+            target = can_to_normalized.get(pid_map[0])
+            if target in session.channels:
+                source_by_name.setdefault(target, f"rcz_can_12_{dev_id}_pid_{pid}")
+
+    sources = {
+        out.GPS_LATITUDE_DEG: session.metadata.get("gps_source", "unknown"),
+        out.GPS_LONGITUDE_DEG: session.metadata.get("gps_source", "unknown"),
+        out.GPS_HEADING_DEG: session.metadata.get("gps_source", "unknown"),
+        out.SPEED_KMH: session.metadata.get("gps_source", "unknown"),
+        out.LAT_G: session.metadata.get(
+            "lateral_accel_source", source_by_name.get(out.LAT_G, "unknown")
+        ),
+        out.LONG_G: session.metadata.get(
+            "longitudinal_accel_source", source_by_name.get(out.LONG_G, "unknown")
+        ),
+        out.VERT_G: session.metadata.get("vertical_accel_source", "unknown"),
+        out.YAW_RATE_DPS: session.metadata.get("yaw_rate_source", "unknown"),
+    }
+    for name in session.channels:
+        source_by_name[name] = sources.get(name, source_by_name.get(name, "unknown"))
+    return source_by_name
+
+
 def load_all_rcz_stints(path: str | Path) -> TelemetrySession:
     """Load all RCZ stints onto one monotonic wall-clock-relative time axis.
 
@@ -365,6 +404,9 @@ def load_all_rcz_stints(path: str | Path) -> TelemetrySession:
         }
     )
     metadata["device_summary_by_stint"] = inspect_rcz_devices(source)
+    devices_by_stint = {
+        item["stint"]: item for item in metadata["device_summary_by_stint"]
+    }
     for source_key in (
         "gps_source",
         "lateral_accel_source",
@@ -381,27 +423,9 @@ def load_all_rcz_stints(path: str | Path) -> TelemetrySession:
             # Do not claim a single sensor/provenance for a mixed day.
             metadata[source_key] = "mixed_or_unknown"
     metadata["channel_provenance_by_stint"] = {
-        stint: {
-            name: (
-                session.metadata.get("gps_source", "unknown")
-                if name in {
-                    out.GPS_LATITUDE_DEG,
-                    out.GPS_LONGITUDE_DEG,
-                    out.GPS_HEADING_DEG,
-                    out.SPEED_KMH,
-                }
-                else session.metadata.get("lateral_accel_source", "unknown")
-                if name == out.LAT_G
-                else session.metadata.get("longitudinal_accel_source", "unknown")
-                if name == out.LONG_G
-                else session.metadata.get("vertical_accel_source", "unknown")
-                if name == out.VERT_G
-                else session.metadata.get("yaw_rate_source", "unknown")
-                if name == out.YAW_RATE_DPS
-                else "rcz_can_obd_or_derived"
-            )
-            for name in session.channels
-        }
+        stint: _channel_sources_for_stint(
+            session, devices_by_stint.get(stint, {})
+        )
         for stint, _, session in parts
     }
 
