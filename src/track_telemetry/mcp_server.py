@@ -330,6 +330,16 @@ def inspect_session(path: str, stint: int | str = "all") -> dict[str, Any]:
     pb = fastest_timed_lap(session)
     result["fastest_timed_lap"] = pb.to_dict() if pb is not None else None
     result["capabilities"] = _session_capabilities(session)
+    result["device_summary_by_stint"] = session.metadata.get("device_summary_by_stint", [])
+    result["channel_provenance_by_stint"] = session.metadata.get(
+        "channel_provenance_by_stint", {}
+    )
+    result["native_sampling_note"] = (
+        "Device-summary native Hz is measured from raw RCZ timestamp channels. "
+        "Normalized output channels may be resampled onto GPS timestamps: "
+        "their sample_rate_hz is not necessarily the CAN/IMU acquisition rate. "
+        "Device model codes are not verified hardware-brand names."
+    )
     return result
 
 
