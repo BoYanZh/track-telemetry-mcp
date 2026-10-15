@@ -28,7 +28,7 @@ jobs:
       - name: Install package and development dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,rcz]"
+          python -m pip install -e ".[dev,rcz,viz]"
 
       - name: Ruff
         run: python -m ruff check .
