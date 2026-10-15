@@ -31,6 +31,7 @@ from .channels import (
     SPEED_KMH,
     STEERING_DEG,
     THROTTLE_PCT,
+    VERT_G,
 )
 from .geometry import latlon_to_xy_m
 from .models import Lap, TelemetrySession
@@ -336,10 +337,12 @@ def render_session_report(
         "Each trace is measured channel data plotted on this lap's elapsed-time axis.",
         "Sparse/missing channels are omitted. Lines are broken across large timestamp gaps.",
         "Accelerator pedal and throttle body are separate controls; G source can be sensor-derived or calculated.",
-        f"Lateral-G provenance: {session.metadata.get('lateral_accel_source', 'unknown')}.",
+        f"Lateral-G provenance: {session.metadata.get('lateral_accel_source_by_stint', {}).get(lap.stint, session.metadata.get('lateral_accel_source', 'unknown'))}.",
+        f"Longitudinal-G provenance: {session.metadata.get('longitudinal_accel_source_by_stint', {}).get(lap.stint, session.metadata.get('longitudinal_accel_source', 'unknown'))}.",
+        "Vertical G, where recorded, includes gravity and is not a lean-angle measurement.",
     ]
     all_names = tuple(dict.fromkeys(
-        (LAT_G, LONG_G)
+        (LAT_G, LONG_G, VERT_G)
         + tuple(c[0] for c in _CONTROL_CHANNELS)
         + tuple(c[0] for c in _HEALTH_CHANNELS)
     ))
@@ -377,7 +380,7 @@ def render_session_report(
     if "g_traces" in chosen:
         available = [
             (name, label, series)
-            for name, label in ((LONG_G, "Longitudinal G"), (LAT_G, "Lateral G"))
+            for name, label in ((LONG_G, "Longitudinal G"), (LAT_G, "Lateral G"), (VERT_G, "Vertical G (gravity included)"))
             if (series := _valid_series(session, lap, name)) is not None
         ]
         if not available:
