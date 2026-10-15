@@ -178,3 +178,49 @@ def test_mcp_client_round_trip_lists_and_calls_tools(
             assert len(session["session_id"]) == 16
 
     asyncio.run(run())
+
+
+def test_resolve_rcz_accepts_uppercase_suffix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "telemetry"
+    root.mkdir()
+    session = root / "session.RCZ"
+    session.write_bytes(b"")
+    monkeypatch.setenv("TRACK_TELEMETRY_ROOT", str(root))
+    monkeypatch.delenv("TRACK_TELEMETRY_UNSAFE_ALLOW_ANY_PATH", raising=False)
+
+    assert mcp_server._resolve_rcz("session.RCZ") == session.resolve()
+
+
+def test_resolve_rcz_rejects_unsupported_suffix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "telemetry"
+    root.mkdir()
+    other = root / "session.csv"
+    other.write_bytes(b"")
+    monkeypatch.setenv("TRACK_TELEMETRY_ROOT", str(root))
+    monkeypatch.delenv("TRACK_TELEMETRY_UNSAFE_ALLOW_ANY_PATH", raising=False)
+
+    with pytest.raises(ValueError, match=r"Expected one of .rcz"):
+        mcp_server._resolve_rcz("session.csv")
+
+
+def test_resolve_output_guards_suffix_and_creates_parents(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "telemetry"
+    root.mkdir()
+    monkeypatch.setenv("TRACK_TELEMETRY_ROOT", str(root))
+    monkeypatch.delenv("TRACK_TELEMETRY_UNSAFE_ALLOW_ANY_PATH", raising=False)
+
+    with pytest.raises(ValueError, match=r"Output must end in .html"):
+        mcp_server._resolve_output("replay.txt", ".html")
+
+    output = mcp_server._resolve_output("nested/replay.html", ".html")
+    assert output == (root / "nested" / "replay.html").resolve()
+    assert output.parent.is_dir()
