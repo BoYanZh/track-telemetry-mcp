@@ -146,6 +146,16 @@ def test_p2_skips_missing_g_and_health_without_fake_values(tmp_path: Path) -> No
     assert not (tmp_path / "empty.html").exists()
 
 
+def test_p2_does_not_call_speed_only_a_driver_input(tmp_path: Path) -> None:
+    session = _session(controls=False)
+    result = render_session_report(
+        session, 1, tmp_path / "no-controls.html", plots=["driver_inputs"]
+    )
+    assert result["generated_plots"] == []
+    assert "No actual driver-input channels" in result["skipped_plots"]["driver_inputs"]
+    assert result["output_html"] is None
+
+
 def test_p2_refuses_sparse_gg_but_keeps_health(tmp_path: Path) -> None:
     session = _session()
     sparse = np.linspace(0, 20, 21)
