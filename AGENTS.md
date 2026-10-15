@@ -37,6 +37,16 @@ Use specialized tools only when the question requires them:
 - `render_incident_player` only when a visual replay is useful.
 - `extract_reference_overlay` only when raw reference telemetry is unavailable and a calibrated overlay config exists.
 
+## Visualization selection
+
+For substantive same-layout lap comparisons, generate the P1 GPS trajectory
+overlay, speed vs reference distance, and cumulative Delta-T report using
+render_lap_comparison when the viz extra is installed. Request conditional P2 G-G,
+G traces, driver inputs or vehicle-health charts with render_session_report
+when recorded channels warrant them. Inspect actual output files, sample
+rates, alignment and skipped reasons. Missing data is not zero; interpolation
+does not create higher-rate GPS. Never join discontinuous stints in a plot.
+
 ## Hard interpretation constraints
 
 - `compare_laps` requires the same physical layout to be independently confirmed before using normalized lap progress.

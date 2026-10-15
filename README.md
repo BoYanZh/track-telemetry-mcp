@@ -9,6 +9,7 @@ Deterministic motorsports telemetry analysis for MCP agents.
 - RaceChrono `.rcz` support via [TrackTelemetryConverter](https://github.com/BoYanZh/TrackTelemetryConverter)
 - multi-stint RaceChrono RCZ recordings with all-day PB discovery and stable original lap numbers
 - lap/PB discovery and lap summaries
+- P1 GPS overlays, speed-vs-distance, Delta T and conditional P2 G/input/health figure reports
 - section analysis: entry, minimum, exit speed, braking, steering, and power-control event timing
 - same-layout lap comparison aligned by physical GPS position, with alignment-quality guards and optional Delta T/V profile
 - braking analysis with raw vs sustained deceleration
@@ -28,7 +29,7 @@ git clone https://github.com/BoYanZh/track-telemetry-mcp.git
 cd track-telemetry-mcp
 
 uv venv
-uv pip install -e ".[dev,rcz,video]"
+uv pip install -e ".[dev,rcz,video,viz]"
 ```
 
 Use only the extras you need:
@@ -36,6 +37,7 @@ Use only the extras you need:
 - `rcz` — RaceChrono decoding through a pinned `track-telemetry-converter` commit
 - `video` — reference-video overlay extraction
 - `dev` — pytest + ruff
+- `viz` — optional headless Matplotlib HTML/PNG telemetry visualization
 
 ## Run
 
@@ -103,6 +105,7 @@ Important rules:
 - only use `analyze_slip_angle` when independent yaw rate is available;
 - keep accelerator-pedal percentage distinct from throttle-body percentage;
 - treat video-derived values as approximate pseudo telemetry.
+- render GPS, V-S and Delta T for substantive same-layout lap comparisons, with P2 diagnostic charts only where useful and measured.
 
 Repository-aware agents should read [`AGENTS.md`](AGENTS.md). Agents that support reusable skills should load [`skill/SKILL.md`](skill/SKILL.md).
 
@@ -135,6 +138,8 @@ Treat video-derived telemetry as approximate pseudo telemetry.
 | `analyze_lap` | whole-lap summary | timed lap required |
 | `analyze_section` | entry/minimum/exit + braking/steering/power event timeline | normalized distance within one layout; threshold-based timing |
 | `compare_laps` | physical-position-aligned mini-sectors; optional sampled Delta T/V profile | same physical layout must be confirmed; GPS alignment must pass quality guards |
+| `render_lap_comparison` | P1 GPS trajectory overlay, speed vs reference distance, cumulative Delta T | requires same layout, GPS alignment and `viz` dependency; outputs HTML + PNG |
+| `render_session_report` | P2 G-G/G traces, driver inputs, vehicle health for one timed lap | channel- and rate-gated; missing channels skipped |
 | `analyze_braking` | deceleration and brake events | does not infer ABS from pressure alone |
 | `analyze_slip_angle` | rotation / vehicle-sideslip proxy | independent yaw source required |
 | `analyze_incident` | slide/spin/off-track reconstruction | bounded known incident window |
@@ -151,6 +156,39 @@ When the source repeats the same original lap number in multiple stints, the MCP
 
 Across-stint time gaps are preserved and **must not be treated as driving telemetry**. For incident windows, select a window inside a single recorded stint; do not interpolate driving behavior across session breaks.
 
+## Telemetry visualization (P1/P2)
+
+Install with `pip install -e ".[rcz,viz]"` to generate PNG figures
+plus a portable HTML report containing embedded images. Static figures
+are intentional; linked interactive dashboards are not part of P1/P2.
+
+Use a file path under `TRACK_TELEMETRY_ROOT` (or a `session_id` from
+`list_sessions`). The `output_html` path must also be inside that root.
+
+```python
+render_lap_comparison(
+    path_a="day1.rcz", lap_a=14, path_b="day2.rcz", lap_b=22,
+    same_layout_confirmed=True, output_html="reports/fast-laps.html",
+    plots=["gps_trace", "speed_distance", "delta_time"],
+)
+render_session_report(
+    path="day2.rcz", lap_number=22,
+    output_html="reports/lap22-diagnostics.html",
+    plots=["gg_diagram", "g_traces", "driver_inputs", "vehicle_health"],
+)
+```
+
+Each tool returns `output_html`, `plot_files`, `generated_plots`,
+`skipped_plots`, `notes` and per-channel samples, rate, and lap coverage.
+P1 comparison includes GPS alignment quality. Speed and Delta-T use physical
+reference-distance interpolation only; plot grid size is **not** source sample
+rate. Raw GPS sample points are visible when sparse. P2 G-G requires paired
+longitudinal and lateral G channels sampled at least 5 Hz, while other P2
+plots include only recorded channels with sufficient lap coverage. Source
+metadata should be checked before using derived G to infer physical grip.
+No chart fills missing data with assumed zeros or bridges different stints.
+
+RCZ GPS source selection is intentionally unchanged by this feature.
 ## Data semantics
 
 Three rules matter most:

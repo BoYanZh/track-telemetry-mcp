@@ -36,6 +36,8 @@ from .reference_video import (
     load_overlay_config,
     write_reference_csv,
 )
+from .report_plots import render_lap_comparison as comparison_figures
+from .report_plots import render_session_report as session_figures
 from .slip_angle import analyze_slip_angle as slip_angle_metrics
 from .slip_angle import yaw_is_independent
 from .visualization import write_incident_html
@@ -483,6 +485,53 @@ def compare_laps(
         mini_sectors=mini_sectors,
         include_profile=include_profile,
         profile_points=profile_points,
+    )
+
+
+@mcp.tool()
+def render_lap_comparison(
+    path_a: str,
+    lap_a: int,
+    path_b: str,
+    lap_b: int,
+    output_html: str,
+    same_layout_confirmed: bool = False,
+    plots: list[str] | None = None,
+) -> dict[str, Any]:
+    """Write P1 static GPS, Speed-vs-Distance and Delta-T comparison figures.
+
+    Requires the same physical circuit layout and successful physical GPS
+    alignment. Outputs a portable HTML report and individual PNG files.
+    Matplotlib requires the optional 'viz' dependency. Low-frequency GPS
+    and alignment uncertainty are labeled, never disguised as extra samples.
+    """
+    session_a = _load(path_a)
+    session_b = _load(path_b)
+    return comparison_figures(
+        session_a, lap_a, session_b, lap_b,
+        _resolve_output(output_html, ".html"),
+        same_layout_confirmed=same_layout_confirmed,
+        plots=plots,
+    )
+
+
+@mcp.tool()
+def render_session_report(
+    path: str,
+    lap_number: int,
+    output_html: str,
+    plots: list[str] | None = None,
+) -> dict[str, Any]:
+    """Write conditional P2 G-G, G, controls and vehicle-health figures.
+
+    Only real recorded channels with adequate coverage are drawn. Missing
+    channels are returned in skipped_plots; nothing is manufactured from GPS
+    or assumed from vehicle hardware. Render a selected timed lap so stint
+    pauses never become false continuous data.
+    """
+    return session_figures(
+        _load(path), lap_number, _resolve_output(output_html, ".html"),
+        plots=plots,
     )
 
 

@@ -25,6 +25,37 @@ Treat `prepare_session.recommended_tools` as general-purpose availability hints,
 
 Do not call every supported tool by default.
 
+## Visualization policy (P1/P2)
+
+Visuals are supporting evidence, not decoration. For substantive **same-layout
+timed-lap comparisons**, render the minimum useful P1 bundle when the viz extra
+is installed: GPS trajectory overlay (gps_trace), V-S speed at *physically
+matched reference distance* (speed_distance), and cumulative signed Delta T
+(delta_time). Use V-T only for a single-lap time-history question. This default
+does not apply to simple PB lookup or incompatible layouts.
+
+Use render_session_report for relevant P2 diagnostics only:
+- G-G (gg_diagram) / G traces (g_traces) for actual recorded longitudinal/lateral
+  acceleration and grip/deceleration questions.
+- driver_inputs for steering, brake, throttle body, accelerator pedal, RPM
+  and gear observations. Keep throttle and accelerator semantically distinct.
+- vehicle_health for oil pressure, oil/coolant temperature and ATF risk.
+
+**Never substitute plots for measurement.** Inspect channel_quality,
+skipped_plots and GPS alignment_quality. Explain any missing/sparse input,
+derived signal or rendering limitation rather than fabricate a plot. Show
+actual sample rate and units; interpolation onto 601 plot positions does not
+turn 1 Hz GPS into high-rate data. Plot raw points for sparse GPS and break
+lines at long gaps. Never connect stints. GPS traces are *driving lines*, not
+surveyed track boundaries or an automatic official corner label.
+
+Call the smallest tool set that answers the question. For a real lap-time
+comparison, use compare_laps to identify relevant laps, generate P1
+figures, then add narrowly targeted sections and P2 evidence if needed.
+A rendered trace shows correlation, not a definitive cause of driver action.
+Link real HTML/PNG outputs when the client can display them; do not claim to
+have drawn a figure that was not created.
+
 ## Core principle
 
 Use deterministic code for measurement and the LLM for interpretation. Do not estimate values that the telemetry tools can calculate.
