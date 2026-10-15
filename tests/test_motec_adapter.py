@@ -24,6 +24,7 @@ def _install_fake(monkeypatch: pytest.MonkeyPatch, *, capture: dict, channels: d
         CH_GROUND_SPEED="MC_GROUND_SPEED",
         CH_CG_ACCEL_LAT="MC_CG_ACCEL_LAT",
         CH_CG_ACCEL_LON="MC_CG_ACCEL_LON",
+        CH_CG_ACCEL_VERT="MC_CG_ACCEL_VERT",
         CH_GPS_LATITUDE="MC_GPS_LATITUDE",
         CH_GPS_LONGITUDE="MC_GPS_LONGITUDE",
         CH_GPS_HEADING="MC_GPS_HEADING",
@@ -40,6 +41,10 @@ def _install_fake(monkeypatch: pytest.MonkeyPatch, *, capture: dict, channels: d
         CH_ENGINE_OIL_TEMP="MC_ENGINE_OIL_TEMP",
         CH_COOLANT_TEMP="MC_COOLANT_TEMP",
         CH_GEARBOX_TEMP="MC_GEARBOX_TEMP",
+        CH_WHEEL_SPEED_FL="MC_WHEEL_SPEED_FL",
+        CH_WHEEL_SPEED_FR="MC_WHEEL_SPEED_FR",
+        CH_WHEEL_SPEED_RL="MC_WHEEL_SPEED_RL",
+        CH_WHEEL_SPEED_RR="MC_WHEEL_SPEED_RR",
     )
 
     class _FakeDataLog:
@@ -208,6 +213,7 @@ def test_distinct_stints_yield_distinct_lap_structures(tmp_path, monkeypatch) ->
         CH_GROUND_SPEED="MC_GROUND_SPEED",
         CH_CG_ACCEL_LAT="MC_CG_ACCEL_LAT",
         CH_CG_ACCEL_LON="MC_CG_ACCEL_LON",
+        CH_CG_ACCEL_VERT="MC_CG_ACCEL_VERT",
         CH_GPS_LATITUDE="MC_GPS_LATITUDE",
         CH_GPS_LONGITUDE="MC_GPS_LONGITUDE",
         CH_GPS_HEADING="MC_GPS_HEADING",
@@ -224,6 +230,10 @@ def test_distinct_stints_yield_distinct_lap_structures(tmp_path, monkeypatch) ->
         CH_ENGINE_OIL_TEMP="MC_ENGINE_OIL_TEMP",
         CH_COOLANT_TEMP="MC_COOLANT_TEMP",
         CH_GEARBOX_TEMP="MC_GEARBOX_TEMP",
+        CH_WHEEL_SPEED_FL="MC_WHEEL_SPEED_FL",
+        CH_WHEEL_SPEED_FR="MC_WHEEL_SPEED_FR",
+        CH_WHEEL_SPEED_RL="MC_WHEEL_SPEED_RL",
+        CH_WHEEL_SPEED_RR="MC_WHEEL_SPEED_RR",
     )
     stint_laps = {
         None: [{"lap_num": 1, "lap_label": "1", "type": "Timed",

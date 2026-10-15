@@ -194,19 +194,22 @@ def test_resolve_rcz_accepts_uppercase_suffix(
     assert mcp_server._resolve_rcz("session.RCZ") == session.resolve()
 
 
-def test_resolve_rcz_rejects_unsupported_suffix(
+def test_resolve_telemetry_accepts_csv_and_rejects_unsupported_suffix(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = tmp_path / "telemetry"
     root.mkdir()
-    other = root / "session.csv"
-    other.write_bytes(b"")
+    supported = root / "session.csv"
+    supported.write_bytes(b"")
+    rejected = root / "session.txt"
+    rejected.write_bytes(b"")
     monkeypatch.setenv("TRACK_TELEMETRY_ROOT", str(root))
     monkeypatch.delenv("TRACK_TELEMETRY_UNSAFE_ALLOW_ANY_PATH", raising=False)
 
-    with pytest.raises(ValueError, match=r"Expected one of .rcz"):
-        mcp_server._resolve_rcz("session.csv")
+    assert mcp_server._resolve_rcz("session.csv") == supported.resolve()
+    with pytest.raises(ValueError, match="Expected one of"):
+        mcp_server._resolve_rcz("session.txt")
 
 
 def test_resolve_output_guards_suffix_and_creates_parents(
