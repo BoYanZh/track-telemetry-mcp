@@ -49,6 +49,10 @@ def _channel_map(mc: Any) -> dict[str, str]:
         mc.CH_ENGINE_OIL_TEMP: out.ENGINE_OIL_TEMP_C,
         mc.CH_COOLANT_TEMP: out.COOLANT_TEMP_C,
         mc.CH_GEARBOX_TEMP: out.GEARBOX_TEMP_C,
+        mc.CH_WHEEL_SPEED_FL: out.WHEEL_FL_KMH,
+        mc.CH_WHEEL_SPEED_FR: out.WHEEL_FR_KMH,
+        mc.CH_WHEEL_SPEED_RL: out.WHEEL_RL_KMH,
+        mc.CH_WHEEL_SPEED_RR: out.WHEEL_RR_KMH,
     }
 
 

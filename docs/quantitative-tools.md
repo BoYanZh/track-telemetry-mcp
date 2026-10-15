@@ -21,3 +21,26 @@ matched intervals. Samples pair within 20 ms, without interpolation. Gaps
 over 250 ms and non-finite points contribute no duration. Output rates can
 reflect converter resampling and must not be called native acquisition rates.
 Sensor mounting, axis signs, grade and banking remain interpretation limits.
+
+## TTC inputs
+
+Install `.[rcz]` for RCZ, RaceChrono CSV and VBOX VBO, or `.[ttc]` to also
+install libxrk for AiM XRK/XRZ. Discovery and path-based tools accept these
+extensions. This is a supported subset, not full TTC format parity.
+
+Sessions report source format, parser diagnostics, source channel inventory,
+recording datetime with timezone limitations, and clock semantics. Timestamps
+retain their common TTC clock; channels are never rebased individually.
+Wheel speeds map to `wheel_fl/fr/rl/rr_kmh`.
+
+RCZ retains original lap IDs, stints and recorder epoch. AiM retains logger
+lap IDs and shared-clock boundaries. CSV preserves original labels separately
+from unique selection IDs, bounds interior laps by label transitions, and marks
+edge groups partial. Transitions have sample-interval timing uncertainty.
+CSV without labels and VBO without TTC lap metadata have no timed laps.
+
+CSV accelerator_pos/PPS remains pedal position. Ambiguous mixed pedal/body
+exports are rejected. Non-RCZ names alone do not prove independent CAN/IMU
+measurements. Unknown provenance remains unknown, so source-sensitive tools
+can be unavailable after parsing. Binary adapter dispatch/clock tests use
+synthetic TTC results; they do not claim real XRK/XRZ decoder validation.

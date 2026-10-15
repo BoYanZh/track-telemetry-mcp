@@ -43,6 +43,7 @@ from .report_plots import render_lap_comparison as comparison_figures
 from .report_plots import render_session_report as session_figures
 from .slip_angle import analyze_slip_angle as slip_angle_metrics
 from .slip_angle import yaw_is_independent
+from .ttc_adapter import SUPPORTED_SUFFIXES, load_telemetry
 from .visualization import write_incident_html
 
 mcp = MCPServer("track-telemetry")
@@ -84,8 +85,8 @@ def _session_index() -> dict[str, Path]:
     if root is None:
         return {}
     sessions: dict[str, Path] = {}
-    for candidate in root.rglob("*.rcz"):
-        if not candidate.is_file():
+    for candidate in root.rglob("*"):
+        if not candidate.is_file() or candidate.suffix.lower() not in SUPPORTED_SUFFIXES:
             continue
         resolved = candidate.resolve()
         if not resolved.is_relative_to(root):
@@ -126,13 +127,15 @@ def _resolve_rcz(raw_path: str) -> Path:
     session = _session_index().get(raw_path)
     if session is not None:
         return session
-    return _resolve_existing(raw_path, {".rcz"})
+    return _resolve_existing(raw_path, SUPPORTED_SUFFIXES)
 
 
 @lru_cache(maxsize=8)
 def _load_cached(path: str, mtime_ns: int) -> TelemetrySession:
     del mtime_ns
-    return load_all_rcz_stints(path)
+    if Path(path).suffix.lower() == ".rcz":
+        return load_all_rcz_stints(path)
+    return load_telemetry(path)
 
 
 def _load(raw_path: str, stint: int | str = "all") -> TelemetrySession:
@@ -311,7 +314,12 @@ def _list_sessions_data() -> dict[str, Any]:
         item: dict[str, Any] = {
             "session_id": session_id,
             "source_name": path.name,
+            "source_extension": path.suffix.lower(),
         }
+        if path.suffix.lower() != ".rcz":
+            item["stints"] = []
+            sessions.append(item)
+            continue
         try:
             item["stints"] = discover_rcz_stints(path)
         except (ValueError, OSError, BadZipFile):
@@ -329,7 +337,7 @@ def _list_sessions_data() -> dict[str, Any]:
 
 @mcp.tool()
 def list_sessions() -> dict[str, Any]:
-    """Discover RCZ recordings and their available stints without exposing host paths."""
+    """Discover RCZ, AiM XRK/XRZ, VBOX VBO and RaceChrono CSV without host paths."""
     return _list_sessions_data()
 
 
