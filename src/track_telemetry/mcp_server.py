@@ -31,13 +31,13 @@ from .laps import compare_laps as compare_lap_data
 from .laps import fastest_timed_lap, lap_summary, section_metrics
 from .models import TelemetrySession
 from .motec_adapter import discover_rcz_stints, load_all_rcz_stints
-from .report_plots import render_lap_comparison as comparison_figures
-from .report_plots import render_session_report as session_figures
 from .reference_video import (
     extract_reference_telemetry,
     load_overlay_config,
     write_reference_csv,
 )
+from .report_plots import render_lap_comparison as comparison_figures
+from .report_plots import render_session_report as session_figures
 from .slip_angle import analyze_slip_angle as slip_angle_metrics
 from .slip_angle import yaw_is_independent
 from .visualization import write_incident_html
@@ -507,7 +507,6 @@ def render_lap_comparison(
     """
     session_a = _load(path_a)
     session_b = _load(path_b)
-    # Perform data validation before creating an output path.
     return comparison_figures(
         session_a, lap_a, session_b, lap_b,
         _resolve_output(output_html, ".html"),
