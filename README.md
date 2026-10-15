@@ -7,6 +7,7 @@ Deterministic motorsports telemetry analysis for MCP agents.
 ## Highlights
 
 - RaceChrono `.rcz` support via [TrackTelemetryConverter](https://github.com/BoYanZh/TrackTelemetryConverter)
+- multi-stint RaceChrono RCZ recordings with all-day PB discovery and stable original lap numbers
 - lap/PB discovery and lap summaries
 - section analysis: entry, minimum, exit speed, braking, steering, and power-control event timing
 - same-layout lap comparison aligned by physical GPS position, with alignment-quality guards and optional Delta T/V profile
@@ -86,8 +87,8 @@ Do not expose the file-backed server directly to the public internet without aut
 Default flow:
 
 ```text
-list_sessions
-  -> prepare_session
+list_sessions (one recording with its stints)
+  -> prepare_session (all recorded stints and the true all-day PB)
   -> inspect_session only if detailed evidence quality matters
   -> smallest relevant analysis tool set
   -> interpretation
@@ -127,10 +128,10 @@ Treat video-derived telemetry as approximate pseudo telemetry.
 
 | Tool | Use for | Important constraint |
 |---|---|---|
-| `list_sessions` | discover RCZ sessions | returns opaque session IDs, not host paths |
-| `prepare_session` | PB/laps + capability gating | preferred second call |
+| `list_sessions` | discover RCZ recordings and contained stints | returns opaque session IDs, not host paths |
+| `prepare_session` | all-stint PB/laps + capability gating | preferred second call |
 | `inspect_session` | detailed metadata, channels, sample rates | use when evidence quality matters |
-| `list_laps` | detailed lap list | optional after `prepare_session` |
+| `list_laps` | all-stint lap list including original numbers and stint indices | optional after `prepare_session` |
 | `analyze_lap` | whole-lap summary | timed lap required |
 | `analyze_section` | entry/minimum/exit + braking/steering/power event timeline | normalized distance within one layout; threshold-based timing |
 | `compare_laps` | physical-position-aligned mini-sectors; optional sampled Delta T/V profile | same physical layout must be confirmed; GPS alignment must pass quality guards |
@@ -141,6 +142,14 @@ Treat video-derived telemetry as approximate pseudo telemetry.
 | `extract_reference_overlay` | approximate onboard-reference telemetry | calibrated video only; pseudo telemetry |
 
 All RCZ-backed tools keep the `path` parameter for compatibility. With a telemetry root configured, `path` may be either a file inside the root or a `session_id` returned by `list_sessions`.
+
+### Multiple RaceChrono stints
+
+RCZ files can contain `resume_1/`, `resume_2/`, etc. The MCP reads all recorded stints by default, retains their physical acquisition time offsets, and exposes the original RaceChrono lap numbers across the day. `list_sessions` shows the available stints, and `prepare_session`/`list_laps` include `stint` alongside each lap and report the overall fastest timed lap. A normal recording containing original lap 22 in stint 3 is addressed simply with `analyze_lap(path, 22)` or `compare_laps(..., lap_b=22, ...)`.
+
+When the source repeats the same original lap number in multiple stints, the MCP uses composite unique lap IDs (e.g., `3000007` for original lap 7 in stint 2) and keeps both `original_number` and `stint` visible; use the exposed `number` as the selector. Synthetic untimed out-lap IDs may be negative. The low-level `load_rcz(path, target_stint=N)` API remains available for callers needing a single stint.
+
+Across-stint time gaps are preserved and **must not be treated as driving telemetry**. For incident windows, select a window inside a single recorded stint; do not interpolate driving behavior across session breaks.
 
 ## Data semantics
 
@@ -196,7 +205,7 @@ For the standard review process and detailed agent behavior:
 
 ## Development
 
-Tests use synthetic telemetry only.
+Tests use synthetic telemetry, including multi-stint RCZ ZIP archives decoded with the pinned Converter dependency.
 
 ```bash
 uv run ruff check .
