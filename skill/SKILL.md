@@ -37,6 +37,12 @@ does not apply to simple PB lookup or incompatible layouts.
 Use render_session_report for relevant P2 diagnostics only:
 - G-G (gg_diagram) / G traces (g_traces) for actual recorded longitudinal/lateral
   acceleration and grip/deceleration questions.
+  G-G plotting must use the **same physical scale for X/Y**, symmetric limits
+  at zero rounded outward to the next 0.5 G, and faint dashed concentric
+  circles of radius 0.5, 1.0, 1.5 G, etc. Label each ring (e.g., `1.0g`),
+  preserve zero-axis reference lines, and annotate acceleration/braking and
+  left/right turn directions. Direction labels assume validated vehicle-axis
+  signs; verify sensor orientation before making driving claims.
 - driver_inputs for steering, brake, throttle body, accelerator pedal, RPM
   and gear observations. Keep throttle and accelerator semantically distinct.
 - vehicle_health for oil pressure, oil/coolant temperature and ATF risk.

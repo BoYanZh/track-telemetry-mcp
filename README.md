@@ -188,6 +188,13 @@ plots include only recorded channels with sufficient lap coverage. Source
 metadata should be checked before using derived G to infer physical grip.
 No chart fills missing data with assumed zeros or bridges different stints.
 
+G-G plots use physically equal X/Y scales and symmetric limits rounded up
+to 0.5-G increments. Subtle dashed concentric reference circles every 0.5 G
+are labeled (`0.5g`, `1.0g`, etc.), alongside zero-axis lines and
+acceleration, braking, left-turn and right-turn captions. Direction captions
+assume a calibrated vehicle-axis sign convention; verify the sensor's mounting
+before interpreting them. Rings are visual references, not tire grip limits.
+
 RCZ GPS source selection is intentionally unchanged by this feature.
 ### RCZ device and IMU provenance
 
