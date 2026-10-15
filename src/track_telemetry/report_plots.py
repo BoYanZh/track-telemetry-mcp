@@ -369,7 +369,7 @@ def render_session_report(
                 ax.scatter(g_lat[nearest[matched]], g_lon[matched], s=9, alpha=0.4)
                 ax.axhline(0, color="gray", linewidth=0.6)
                 ax.axvline(0, color="gray", linewidth=0.6)
-                ax.set(xlabel="Lateral acceleration (G)", ylabel="Longitudinal acceleration (G)", title="Measured G-G scatter")
+                ax.set(xlabel="Lateral acceleration (G)", ylabel="Longitudinal acceleration (G)", title="Paired G channels (check provenance)")
                 ax.grid(alpha=0.3)
                 ax.set_aspect("equal", adjustable="datalim")
                 all_figures.append(("gg_diagram", fig))
@@ -413,7 +413,11 @@ def render_session_report(
         all_figures.append((plot_name, fig))
 
     if "driver_inputs" in chosen:
-        stacked_plot("driver_inputs", _CONTROL_CHANNELS)
+        actual_inputs = tuple(item for item in _CONTROL_CHANNELS if item[0] != SPEED_KMH)
+        if not any(_valid_series(session, lap, item[0]) is not None for item in actual_inputs):
+            skipped["driver_inputs"] = "No actual driver-input channels with sufficient samples"
+        else:
+            stacked_plot("driver_inputs", _CONTROL_CHANNELS)
     if "vehicle_health" in chosen:
         stacked_plot("vehicle_health", _HEALTH_CHANNELS)
 
