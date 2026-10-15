@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import csv
 import io
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -15,7 +16,14 @@ from .motec_adapter import _channel_map, _motec_dependencies, load_all_rcz_stint
 SUPPORTED_SUFFIXES = {".rcz", ".xrk", ".xrz", ".vbo", ".csv"}
 
 
-def _csv_laps(lines: list[str]) -> tuple[list[Lap], dict]:
+def _csv_name(name: str) -> str:
+    name = name.strip().lower().replace("_", " ").replace("-", " ")
+    if " (" in name and name.endswith(")"):
+        name = name.rsplit(" (", 1)[0]
+    return name
+
+
+def _csv_laps(lines: list[str], converter_laps: list[Lap]) -> tuple[list[Lap], dict]:
     """Use recorded contiguous lap labels, never TTC's whole-file timed fallback.
 
     CSV first/last samples are observed bounds, not beacon-quality boundaries.
@@ -26,10 +34,8 @@ def _csv_laps(lines: list[str]) -> tuple[list[Lap], dict]:
                          r[0].strip().lower() in {"time", "time (s)", "timestamp"}), None)
     if header_index is None:
         raise ValueError("Not a supported RaceChrono CSV table")
-    header = [h.strip().lower().replace("_", " ") for h in rows[header_index]]
+    header = [_csv_name(h) for h in rows[header_index]]
     lap_col = next((i for i, h in enumerate(header) if h in {"lap", "lap number"}), None)
-    if lap_col is None:
-        return [], {"lap_timing_semantics": "No recorded lap labels; no timed laps inferred"}
     groups = []
     previous_time = -np.inf
     for row in rows[header_index + 1:]:
@@ -40,11 +46,32 @@ def _csv_laps(lines: list[str]) -> tuple[list[Lap], dict]:
         if not np.isfinite(t) or t <= previous_time:
             raise ValueError("CSV clock must be finite and strictly increasing")
         previous_time = t
-        label = row[lap_col].strip() if len(row) > lap_col else ""
+        label = row[lap_col].strip() if lap_col is not None and len(row) > lap_col else ""
         if not groups or groups[-1][0] != label:
             groups.append([label, t, t])
         else:
             groups[-1][2] = t
+    beacon_rows = [row for row in rows[:header_index] if row and row[0].strip().lower() == "beacon markers"]
+    if beacon_rows:
+        try:
+            beacons = np.array([float(value) for row in beacon_rows for value in row[1:] if value.strip()])
+        except ValueError as exc:
+            raise ValueError("Invalid CSV beacon markers") from exc
+        if (not len(beacons) or not groups or not np.all(np.isfinite(beacons)) or
+                np.any(np.diff(beacons) <= 0) or beacons[0] < groups[0][1] or beacons[-1] > groups[-1][2]):
+            raise ValueError("CSV beacon markers must increase within the recorded clock")
+        # TTC numbers beacon intervals for selection; those are not recorded
+        # source lap IDs. Retain row labels only when unambiguous in an interval.
+        laps = []
+        for lap in converter_laps:
+            labels = {label for label, start, end in groups
+                      if label and start < lap.end_s and end >= lap.start_s}
+            label = next(iter(labels)) if len(labels) == 1 else None
+            original = int(label) if label is not None and label.lstrip("-").isdigit() else None
+            laps.append(replace(lap, original_number=original))
+        return laps, {"lap_timing_semantics": "Recorded CSV beacon markers on the preserved channel clock"}
+    if lap_col is None:
+        return [], {"lap_timing_semantics": "No recorded lap labels or beacons; no timed laps inferred"}
     laps = []
     for i, (label, start, end) in enumerate(groups):
         if not label:
@@ -118,13 +145,13 @@ def load_telemetry(path: str | Path) -> TelemetrySession:
                 original_number=int(raw.get("orig_num", raw["lap_num"])),
                 stint=raw.get("stint")) for raw in log.laps_info.get("laps", [])]
     if suffix == ".csv":
-        laps, timing = _csv_laps(lines)
+        laps, timing = _csv_laps(lines, laps)
         metadata.update(timing)
         # TTC maps RaceChrono accelerator_pos/PPS to Throttle Pos. Correct
         # pedal semantics when no explicit throttle-body column exists.
         headers = [r for r in csv.reader(lines) if r and r[0].strip().lower() in {"time", "time (s)", "timestamp"}]
         if headers:
-            names = {h.lower().strip().replace("_", " ") for h in headers[0]}
+            names = {_csv_name(h) for h in headers[0]}
             if names & {"accelerator pos", "pps"}:
                 if names & {"throttle pos", "throttle", "throttle position"}:
                     raise ValueError("Ambiguous mixed pedal/throttle CSV mapping in TTC; export channels separately")

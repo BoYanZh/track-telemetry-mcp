@@ -18,7 +18,8 @@ not available tire grip or a percentage of an assumed friction circle.
 G measurements require verified CAN/IMU acceleration provenance, G units,
 unique increasing clocks, at least 5 Hz output, and 80% coverage by valid
 matched intervals. Samples pair within 20 ms, without interpolation. Gaps
-over 250 ms and non-finite points contribute no duration. Output rates can
+over 250 ms, non-finite points and intervals reusing a source sample contribute
+no duration. Output rates can
 reflect converter resampling and must not be called native acquisition rates.
 Sensor mounting, axis signs, grade and banking remain interpretation limits.
 
@@ -34,7 +35,9 @@ retain their common TTC clock; channels are never rebased individually.
 Wheel speeds map to `wheel_fl/fr/rl/rr_kmh`.
 
 RCZ retains original lap IDs, stints and recorder epoch. AiM retains logger
-lap IDs and shared-clock boundaries. CSV preserves original labels separately
+lap IDs and shared-clock boundaries. CSV uses recorded beacon boundaries when
+present, preserving TTC's lap types without inventing original source lap IDs.
+Without beacons, CSV preserves original labels separately
 from unique selection IDs, bounds interior laps by label transitions, and marks
 edge groups partial. Transitions have sample-interval timing uncertainty.
 CSV without labels and VBO without TTC lap metadata have no timed laps.
