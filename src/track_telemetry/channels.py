@@ -3,6 +3,7 @@
 SPEED_KMH = "speed_kmh"
 LAT_G = "lat_g"
 LONG_G = "long_g"
+VERT_G = "vert_g"
 GPS_LATITUDE_DEG = "gps_latitude_deg"
 GPS_LONGITUDE_DEG = "gps_longitude_deg"
 GPS_HEADING_DEG = "gps_heading_deg"

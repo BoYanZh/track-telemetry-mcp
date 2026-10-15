@@ -32,6 +32,7 @@ def _channel_map(mc: Any) -> dict[str, str]:
         mc.CH_GROUND_SPEED: out.SPEED_KMH,
         mc.CH_CG_ACCEL_LAT: out.LAT_G,
         mc.CH_CG_ACCEL_LON: out.LONG_G,
+        mc.CH_CG_ACCEL_VERT: out.VERT_G,
         mc.CH_GPS_LATITUDE: out.GPS_LATITUDE_DEG,
         mc.CH_GPS_LONGITUDE: out.GPS_LONGITUDE_DEG,
         mc.CH_GPS_HEADING: out.GPS_HEADING_DEG,
@@ -158,6 +159,138 @@ def discover_rcz_stints(path: str | Path) -> list[dict[str, int]]:
         ]
 
 
+def inspect_rcz_devices(path: str | Path) -> list[dict[str, Any]]:
+    """Inventory logger devices and native acquisition clocks for each stint.
+
+    Only metadata and timestamp channels are decoded. Model IDs are RaceChrono
+    codes, not evidence of a particular hardware brand. Rates refer to the
+    source files, not to the Converter's resampled GPS-aligned output.
+    """
+    source = Path(path).expanduser().resolve()
+    roles = {1: "gps", 2: "accelerometer", 3: "gyroscope", 12: "can_obd"}
+    known = {
+        1: {"gps_latitude_deg": "3_1", "gps_speed_kmh": "4_0"},
+        2: {"lat_g": "10_0", "long_g": "9_0", "vert_g": "11_0"},
+        3: {"yaw_rate_dps": "14_0"},
+    }
+
+    def rate_and_count(archive: zipfile.ZipFile, name: str) -> tuple[int, float | None]:
+        timestamps = np.frombuffer(archive.read(name), dtype="<i8")
+        if len(timestamps) < 2:
+            return len(timestamps), None
+        positive = np.diff(timestamps)
+        positive = positive[positive > 0]
+        return (
+            len(timestamps),
+            float(1000 / np.median(positive)) if len(positive) else None,
+        )
+
+    inventories: list[dict[str, Any]] = []
+    with zipfile.ZipFile(source) as archive:
+        names = set(archive.namelist())
+        for desc in discover_rcz_stints(source):
+            stint = desc["stint"]
+            prefix = "" if stint == 0 else f"resume_{stint}/"
+            key = prefix + "sessionfragment.json"
+            if key not in names:
+                inventories.append({
+                    "stint": stint,
+                    "primary_gps_device_id": None,
+                    "devices": [],
+                    "warning": "Missing sessionfragment.json device metadata",
+                })
+                continue
+            fragment = json.loads(archive.read(key))
+            primary = fragment.get("primaryGpsDeviceIndex")
+            devices: list[dict[str, Any]] = []
+            for raw in fragment.get("devices2", []):
+                selector = raw.get("selector", {})
+                device_type = selector.get("type")
+                device_id = selector.get("id")
+                if not isinstance(device_type, int) or not isinstance(device_id, int):
+                    continue
+                is_primary = device_type == 1 and device_id == primary
+                basename = f"channel_{device_type}_{device_id}_0_"
+                channels = known.get(device_type, {})
+                native_rates: dict[str, Any] = {}
+                ts_name = prefix + basename + "1_1"
+                if device_type == 12:
+                    # CAN PIDs have independent rates, not one device Hz.
+                    pid_prefix = prefix + f"channel_12_{device_id}_"
+                    for item in sorted(names):
+                        if not (item.startswith(pid_prefix) and item.endswith("_1_1")):
+                            continue
+                        pid = item[len(pid_prefix):-4]
+                        count, hz = rate_and_count(archive, item)
+                        native_rates[f"pid_{pid}"] = {"samples": count, "rate_hz": hz}
+                    sample_count, rate = 0, None
+                elif ts_name in names:
+                    sample_count, rate = rate_and_count(archive, ts_name)
+                else:
+                    sample_count, rate = 0, None
+                devices.append({
+                    "type": device_type,
+                    "device_id": device_id,
+                    "model_code": selector.get("model"),
+                    "role": roles.get(device_type, "other"),
+                    "is_primary_gps": is_primary,
+                    "timestamp_samples": sample_count,
+                    "native_sample_rate_hz": rate,
+                    "recorded_channels": [
+                        name for name, suffix in channels.items()
+                        if prefix + basename + suffix in names
+                    ],
+                    "native_can_pid_rates": native_rates if device_type == 12 else {},
+                })
+            inventories.append({
+                "stint": stint,
+                "primary_gps_device_id": primary,
+                "imu_accel_device_id": fragment.get("imuAccDevice"),
+                "imu_gyro_device_id": fragment.get("imuGyroDevice"),
+                "devices": devices,
+            })
+    return inventories
+
+
+def _channel_sources_for_stint(
+    session: TelemetrySession, device_summary: dict[str, Any]
+) -> dict[str, str]:
+    """Label canonical channels by measured RCZ source, including CAN PID."""
+    mc, _ = _motec_dependencies()
+    source_by_name: dict[str, str] = {}
+    can_to_normalized = _channel_map(mc)
+    for device in device_summary.get("devices", []):
+        if device["role"] != "can_obd":
+            continue
+        dev_id = device["device_id"]
+        for key in device.get("native_can_pid_rates", {}):
+            pid = key.removeprefix("pid_")
+            pid_map = mc.RCZ_PID_MAP.get(pid)
+            if pid_map is None:
+                continue
+            target = can_to_normalized.get(pid_map[0])
+            if target in session.channels:
+                source_by_name.setdefault(target, f"rcz_can_12_{dev_id}_pid_{pid}")
+
+    sources = {
+        out.GPS_LATITUDE_DEG: session.metadata.get("gps_source", "unknown"),
+        out.GPS_LONGITUDE_DEG: session.metadata.get("gps_source", "unknown"),
+        out.GPS_HEADING_DEG: session.metadata.get("gps_source", "unknown"),
+        out.SPEED_KMH: session.metadata.get("gps_source", "unknown"),
+        out.LAT_G: session.metadata.get(
+            "lateral_accel_source", source_by_name.get(out.LAT_G, "unknown")
+        ),
+        out.LONG_G: session.metadata.get(
+            "longitudinal_accel_source", source_by_name.get(out.LONG_G, "unknown")
+        ),
+        out.VERT_G: session.metadata.get("vertical_accel_source", "unknown"),
+        out.YAW_RATE_DPS: session.metadata.get("yaw_rate_source", "unknown"),
+    }
+    for name in session.channels:
+        source_by_name[name] = sources.get(name, source_by_name.get(name, "unknown"))
+    return source_by_name
+
+
 def load_all_rcz_stints(path: str | Path) -> TelemetrySession:
     """Load all RCZ stints onto one monotonic wall-clock-relative time axis.
 
@@ -270,15 +403,31 @@ def load_all_rcz_stints(path: str | Path) -> TelemetrySession:
             "stints": stint_info,
         }
     )
-    sources = {
-        stint: str(session.metadata.get("yaw_rate_source", "unknown"))
+    metadata["device_summary_by_stint"] = inspect_rcz_devices(source)
+    devices_by_stint = {
+        item["stint"]: item for item in metadata["device_summary_by_stint"]
+    }
+    for source_key in (
+        "gps_source",
+        "lateral_accel_source",
+        "longitudinal_accel_source",
+        "vertical_accel_source",
+        "yaw_rate_source",
+    ):
+        sources = {
+            stint: str(session.metadata.get(source_key, "unknown"))
+            for stint, _, session in parts
+        }
+        metadata[f"{source_key}_by_stint"] = sources
+        if len(set(sources.values())) != 1:
+            # Do not claim a single sensor/provenance for a mixed day.
+            metadata[source_key] = "mixed_or_unknown"
+    metadata["channel_provenance_by_stint"] = {
+        stint: _channel_sources_for_stint(
+            session, devices_by_stint.get(stint, {})
+        )
         for stint, _, session in parts
     }
-    metadata["yaw_rate_source_by_stint"] = sources
-    if len(set(sources.values())) != 1:
-        # Aggregation must not falsely advertise independent yaw for a day
-        # that includes GPS-derived yaw or unknown provenance.
-        metadata["yaw_rate_source"] = "mixed_or_unknown"
 
     laps.sort(key=lambda lap: (lap.start_s, lap.end_s))
     return TelemetrySession(
