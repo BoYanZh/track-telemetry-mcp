@@ -32,6 +32,7 @@ def _channel_map(mc: Any) -> dict[str, str]:
         mc.CH_GROUND_SPEED: out.SPEED_KMH,
         mc.CH_CG_ACCEL_LAT: out.LAT_G,
         mc.CH_CG_ACCEL_LON: out.LONG_G,
+        mc.CH_CG_ACCEL_VERT: out.VERT_G,
         mc.CH_GPS_LATITUDE: out.GPS_LATITUDE_DEG,
         mc.CH_GPS_LONGITUDE: out.GPS_LONGITUDE_DEG,
         mc.CH_GPS_HEADING: out.GPS_HEADING_DEG,
