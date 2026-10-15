@@ -122,6 +122,57 @@ def _valid_series(
     return (t, v) if len(t) >= min_points else None
 
 
+def _style_gg_axes(ax, lateral_g: np.ndarray, longitudinal_g: np.ndarray) -> float:
+    """Use physically equal G units, concentric 0.5-G rings, and readable directions.
+
+    Left/right captions follow the normalized vehicle-axis sign convention;
+    confirm sensor orientation before interpreting them as turn direction.
+    """
+    from matplotlib.patches import Circle
+
+    max_g = float(max(np.max(np.abs(lateral_g)), np.max(np.abs(longitudinal_g))))
+    limit = max(0.5, float(np.ceil(max_g / 0.5) * 0.5))
+    radii = np.arange(0.5, limit + 1e-9, 0.5)
+    for radius in radii:
+        ax.add_patch(
+            Circle(
+                (0.0, 0.0), float(radius), fill=False, clip_on=True,
+                linestyle=(0, (4, 4)), linewidth=0.9,
+                edgecolor="#9ca3af", alpha=0.65, zorder=0,
+            )
+        )
+        # Place ring labels at a 45-degree angle to reduce overlap with axes.
+        pos = float(radius / np.sqrt(2))
+        ax.text(
+            pos, pos, f"{radius:.1f}g", fontsize=8, color="#64748b",
+            ha="center", va="center", zorder=4,
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.7, "pad": 0.7},
+        )
+
+    ax.set_xlim(-limit, limit)
+    ax.set_ylim(-limit, limit)
+    ax.set_aspect("equal", adjustable="box")
+    ax.axhline(0, color="#64748b", linewidth=0.85, alpha=0.75, zorder=1)
+    ax.axvline(0, color="#64748b", linewidth=0.85, alpha=0.75, zorder=1)
+    ax.grid(False)
+
+    # Keep direction labels subtle and out of the busy center of the G-G cloud.
+    labels = (
+        (0.50, 0.98, "ACCELERATING (+G)", "center", "top"),
+        (0.50, 0.02, "BRAKING (−G)", "center", "bottom"),
+        (0.02, 0.50, "LEFT TURN (−G)", "left", "center"),
+        (0.98, 0.50, "RIGHT TURN (+G)", "right", "center"),
+    )
+    for x, y, caption, ha, va in labels:
+        ax.text(
+            x, y, caption, transform=ax.transAxes, ha=ha, va=va,
+            fontsize=8.5, weight="medium", color="#475569", alpha=0.9,
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.8, "pad": 1.5},
+            zorder=5,
+        )
+    return limit
+
+
 def _plot_raw(ax, t: np.ndarray, v: np.ndarray, *, label: str) -> None:
     """Plot raw points without connecting stretches of missing samples."""
     if len(t) < 2:
@@ -367,14 +418,21 @@ def render_session_report(
             if np.count_nonzero(matched) < 10:
                 skipped["gg_diagram"] = "Too few timestamp-matched independent G samples"
             else:
-                fig = _figure(height=5.7)
+                fig = _figure(height=7.0)
                 ax = fig.subplots()
-                ax.scatter(g_lat[nearest[matched]], g_lon[matched], s=9, alpha=0.4)
-                ax.axhline(0, color="gray", linewidth=0.6)
-                ax.axvline(0, color="gray", linewidth=0.6)
-                ax.set(xlabel="Lateral acceleration (G)", ylabel="Longitudinal acceleration (G)", title="Paired G channels (check provenance)")
-                ax.grid(alpha=0.3)
-                ax.set_aspect("equal", adjustable="datalim")
+                paired_lat = g_lat[nearest[matched]]
+                paired_lon = g_lon[matched]
+                ax.scatter(paired_lat, paired_lon, s=9, alpha=0.4, zorder=2)
+                _style_gg_axes(ax, paired_lat, paired_lon)
+                ax.set(
+                    xlabel="Lateral acceleration (G)",
+                    ylabel="Longitudinal acceleration (G)",
+                    title="G-G diagram · time-matched samples",
+                )
+                notes.append(
+                    "G-G: X and Y use equal scale, with dashed 0.5-G rings. "
+                    "Left/right annotations assume calibrated vehicle axes; verify sensor mounting."
+                )
                 all_figures.append(("gg_diagram", fig))
 
     if "g_traces" in chosen:
