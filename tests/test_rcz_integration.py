@@ -169,6 +169,25 @@ def test_mcp_exposes_all_stints_and_can_compare_laps_across_stints(
             assert prepared["fastest_timed_lap_stint"] == 2
             assert prepared["timed_lap_numbers"] == [7, 8, 20, 21, 22, 23]
 
+            selected = (await client.call_tool(
+                "prepare_session", {"path": source_id, "stint": 2}
+            )).structured_content
+            assert selected is not None
+            assert selected["fastest_timed_lap_number"] == 22
+            assert selected["timed_lap_numbers"] == [22, 23]
+            assert selected["stints"][0]["stint"] == 2
+            selected_laps = (await client.call_tool(
+                "list_laps", {"path": source_id, "stint": 1}
+            )).structured_content
+            assert selected_laps is not None
+            assert [lap["number"] for lap in selected_laps["laps"] if lap["kind"] == "Timed"] == [20, 21]
+            inspected = (await client.call_tool(
+                "inspect_session", {"path": source_id, "stint": 2}
+            )).structured_content
+            assert inspected is not None
+            assert inspected["metadata"]["target_stint"] == 2
+            assert inspected["channels"][SPEED_KMH]["start_s"] >= 7200.0
+
             all_laps = (await client.call_tool("list_laps", {"path": source_id})).structured_content
             assert all_laps is not None
             assert len([lap for lap in all_laps["laps"] if lap["kind"] == "Timed"]) == 6
