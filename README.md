@@ -189,6 +189,26 @@ metadata should be checked before using derived G to infer physical grip.
 No chart fills missing data with assumed zeros or bridges different stints.
 
 RCZ GPS source selection is intentionally unchanged by this feature.
+### RCZ device and IMU provenance
+
+The MCP exposes per-stint `device_summary_by_stint` and
+`channel_provenance_by_stint` in `inspect_session`. Device entries include
+RaceChrono type/device/model codes, primary-GPS flag, supported sensor
+channels, raw timestamp counts and **native** median sample rates. CAN devices
+report rates per PID because they do not have a single clock. Converter output
+channels are aligned to GPS timestamps, so their normalized rate must not be
+mistaken for original CAN/IMU acquisition frequency.
+
+The pinned Converter decodes device-2 accelerometer channels 9/10/11 as
+longitudinal/lateral/vertical G (vertical includes gravity) and device-3
+gyro Z as canonical vehicle yaw with sign consistent with CAN PID 51 and GPS
+bearing increase. CAN yaw is preferred when recorded; otherwise independent
+IMU gyro is used. Mixed stint provenance is explicitly labeled and specialized
+yaw/sideslip analysis fails closed unless provenance is unambiguous.
+
+This code is covered by synthetic RCZ integration tests. No private driver
+telemetry files are committed to GitHub.
+
 ## Data semantics
 
 Three rules matter most:
