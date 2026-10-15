@@ -72,3 +72,15 @@ def test_matching_does_not_bridge_missing_points():
     _, _, weights, quality = matched_window(s, 7, ("lat_g", "long_g"))
     assert 0 < weights.sum() < 10
     assert quality["coverage_fraction"] < 1
+
+
+def test_matching_does_not_weight_reused_samples_on_irregular_clocks():
+    base = np.arange(0, 9.991, 0.03)
+    irregular = np.r_[np.arange(0, 1, 0.05), np.arange(1, 10, 0.02)]
+    s = TelemetrySession("irregular", "synthetic",
+        laps=[Lap(1, "1", "Timed", 0, 9.99, 9.99)],
+        channels={"base": ChannelSeries("base", "", base, base),
+                  "irregular": ChannelSeries("irregular", "", irregular, irregular)})
+    _, values, weights, quality = matched_window(s, 1, ("base", "irregular"))
+    assert np.all(np.diff(values[:, 1])[weights > 0] > 0)
+    assert quality["coverage_fraction"] >= 0.8

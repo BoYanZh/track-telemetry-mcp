@@ -83,18 +83,20 @@ def matched_window(
     t = base.timestamps
     columns = []
     good = np.ones(len(t), dtype=bool)
+    advancing = np.ones(len(t) - 1, dtype=bool)
     errors = []
     for ch in series:
         right = np.searchsorted(ch.timestamps, t).clip(0, len(ch.timestamps) - 1)
         left = np.maximum(right - 1, 0)
         idx = np.where(abs(t - ch.timestamps[left]) <= abs(t - ch.timestamps[right]), left, right)
+        advancing &= np.diff(idx) > 0
         error = abs(t - ch.timestamps[idx])
         good &= (error <= tolerance_s) & np.isfinite(ch.values[idx])
         columns.append(ch.values[idx])
         errors.append(error)
     values = np.column_stack(columns)
     dt = np.diff(t)
-    valid_interval = good[:-1] & good[1:] & (dt <= max_gap_s)
+    valid_interval = good[:-1] & good[1:] & advancing & (dt <= max_gap_s)
     weights = np.where(valid_interval, dt, 0.0)
     coverage = float(weights.sum() / (end - start))
     if coverage < 0.8:

@@ -37,6 +37,34 @@ def test_csv_without_lap_metadata_has_no_fake_timed_lap(tmp_path):
     assert result.metadata["yaw_rate_source"] == "gps_heading_derivative"
 
 
+def test_csv_beacon_boundaries_survive_without_row_lap_labels(tmp_path):
+    path = tmp_path / "beacons.csv"
+    path.write_text("Beacon markers,20,60,100,120\nTime,speed,bearing\ns,m/s,deg\n" +
+                    "".join(f"{i},20,0\n" for i in range(121)))
+    result = load_telemetry(path)
+    assert [(lap.start_s, lap.end_s) for lap in result.laps if lap.is_timed] == [(20, 60), (60, 100)]
+    assert all(lap.original_number is None for lap in result.laps)
+    assert "beacon" in result.metadata["lap_timing_semantics"].lower()
+
+
+@pytest.mark.parametrize("markers", ["20,10,100", "20,nan,100", "20,60,200"])
+def test_csv_rejects_invalid_beacon_timing(tmp_path, markers):
+    path = tmp_path / "bad-beacons.csv"
+    path.write_text(f"Beacon markers,{markers}\nTime,speed,bearing\ns,m/s,deg\n" +
+                    "".join(f"{i},20,0\n" for i in range(121)))
+    with pytest.raises(ValueError, match="beacon"):
+        load_telemetry(path)
+
+
+@pytest.mark.parametrize("body", ["Throttle Pos (%)", "Throttle-Pos (%)", "Throttle_Pos (%)"])
+def test_csv_rejects_unit_qualified_mixed_pedal_and_body(tmp_path, body):
+    path = tmp_path / "mixed.csv"
+    path.write_text(f"Time,{body},accelerator_pos,lap_number,speed\ns,%,%,,m/s\n" +
+                    "".join(f"{i},10,80,{i // 10 + 1},20\n" for i in range(31)))
+    with pytest.raises(ValueError, match="mixed pedal/throttle"):
+        load_telemetry(path)
+
+
 def test_vbo_midnight_clock_and_no_inferred_laps(tmp_path):
     path = tmp_path / "synthetic.VBO"
     path.write_text("File created on 14/10/2026 at 23:59:59\n[column names]\n"
