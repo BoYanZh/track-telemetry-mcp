@@ -416,12 +416,14 @@ def compare_laps(
     lap_b: int,
     same_layout_confirmed: bool = False,
     mini_sectors: int = 20,
+    include_profile: bool = False,
+    profile_points: int = 201,
 ) -> dict[str, Any]:
-    """Compare two laps by normalized GPS distance.
+    """Compare laps at matched physical GPS positions on lap B's trajectory.
 
-    Use only after independently confirming both laps use the same physical layout, then
-    set same_layout_confirmed=true. Never use normalized lap progress to compare different
-    layouts; compare shared physical sections instead.
+    First verify the same track layout, then set same_layout_confirmed=true.
+    Set include_profile=true to receive sampled delta T / delta V curves.
+    Comparisons fail closed when GPS alignment quality is inadequate.
     """
     return compare_lap_data(
         _load(path_a),
@@ -430,6 +432,8 @@ def compare_laps(
         lap_b,
         same_layout_confirmed=same_layout_confirmed,
         mini_sectors=mini_sectors,
+        include_profile=include_profile,
+        profile_points=profile_points,
     )
 
 
