@@ -20,6 +20,7 @@ from .channels import (
     GPS_LATITUDE_DEG,
     GPS_LONGITUDE_DEG,
     LONG_G,
+    VERT_G,
     SPEED_KMH,
     STEERING_DEG,
     THROTTLE_PCT,
