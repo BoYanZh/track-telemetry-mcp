@@ -97,6 +97,16 @@ If reference telemetry was reconstructed from onboard video overlays:
 - prefer robust signals such as speed and map position over poorly calibrated overlay percentages
 - never numerically equate video brake percentage with hydraulic brake pressure without calibration
 
+## Visual evidence
+
+For meaningful same-layout comparisons, generate P1 GPS overlay, V-S and
+cumulative Delta-T plots using render_lap_comparison when available. Use
+P2 G-G/G, driver inputs and health via render_session_report only for
+relevant, sufficiently sampled channels. Include actual HTML/PNG links or
+artifact paths, describe the Delta-T sign, and report missing charts
+using skipped_plots. If GPS is sparse, do not infer exact brake/apex
+locations from interpolated plots. Never claim an ungenerated plot exists.
+
 ## Output format
 
 Start with:
