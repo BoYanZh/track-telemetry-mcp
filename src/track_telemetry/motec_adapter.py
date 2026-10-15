@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from collections import Counter
 import json
-from pathlib import Path
 import re
-from typing import Any
 import zipfile
+from collections import Counter
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 
