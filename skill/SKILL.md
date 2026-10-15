@@ -56,6 +56,19 @@ A rendered trace shows correlation, not a definitive cause of driver action.
 Link real HTML/PNG outputs when the client can display them; do not claim to
 have drawn a figure that was not created.
 
+### Device provenance check
+
+When the user asks whether GPS/IMU/CAN sources were decoded correctly,
+inspect `inspect_session.device_summary_by_stint` and
+`channel_provenance_by_stint` before reporting sample rates.
+Native raw-device Hz may differ from the Converter's normalized 25 Hz
+sample rate. Do not identify the receiver hardware brand from RaceChrono's
+internal model code alone. The vertical acceleration channel is `vert_g`
+(including gravity), not a lean angle. Independent gyro yaw and CAN yaw are
+normalized to the same sign; inspect the chosen `yaw_rate_source`.
+For mixed per-stint yaw sources, restrict slip/incident analysis to a
+verified single stint or reject it.
+
 ## Core principle
 
 Use deterministic code for measurement and the LLM for interpretation. Do not estimate values that the telemetry tools can calculate.
