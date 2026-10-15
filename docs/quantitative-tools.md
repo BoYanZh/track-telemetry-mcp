@@ -82,3 +82,6 @@ delay using signed correlation of sample changes and reports signed yaw gain
 against recorded steering angle. Correlation magnitude must reach 0.6.
 Clock offsets and filtering contribute to delay; a boundary peak is flagged.
 Neither an understeer gradient nor a road-wheel steering ratio is inferred.
+Select a stable-speed maneuver with optional session-clock `start_s` and
+`end_s` inside the timed lap. Both bounds are required together; coverage uses
+the requested window while the returned lap identity and timing stay intact.

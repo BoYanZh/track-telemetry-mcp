@@ -564,13 +564,15 @@ def analyze_wheel_speeds(path: str, lap_number: int) -> dict[str, Any]:
 
 
 @mcp.tool()
-def analyze_steering_response(path: str, lap_number: int) -> dict[str, Any]:
+def analyze_steering_response(path: str, lap_number: int,
+                              start_s: float | None = None, end_s: float | None = None) -> dict[str, Any]:
     """Measure signed steering/yaw gain and 0-0.5 s correlation delay.
 
     Requires independent measured yaw/steering at native >=10 Hz, a continuous
     matched clock, excitation and limited speed variation. No understeer diagnosis.
+    Select a stable-speed maneuver with session-clock start_s/end_s inside the lap.
     """
-    return steering_response_metrics(_load(path), lap_number)
+    return steering_response_metrics(_load(path), lap_number, start_s=start_s, end_s=end_s)
 
 
 @mcp.tool()

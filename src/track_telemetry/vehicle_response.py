@@ -128,7 +128,8 @@ def analyze_wheel_speeds(session: TelemetrySession, lap_number: int) -> dict:
                             "No eligible straight braking means no opportunity to assess deficits, not evidence of no ABS."]}
 
 
-def analyze_steering_response(session: TelemetrySession, lap_number: int) -> dict:
+def analyze_steering_response(session: TelemetrySession, lap_number: int, *,
+                              start_s: float | None = None, end_s: float | None = None) -> dict:
     """Measure signed steering/yaw gain and bounded delay correlation on a clean lap."""
     _require_measured(session, lap_number, (STEERING_DEG, YAW_RATE_DPS))
     if not yaw_is_independent(channel_source(session, YAW_RATE_DPS, lap_number)):
@@ -138,7 +139,7 @@ def analyze_steering_response(session: TelemetrySession, lap_number: int) -> dic
     _require_units(session, {STEERING_DEG: "deg", YAW_RATE_DPS: "deg/s", SPEED_KMH: "km/h"})
     t, values, weights, quality = matched_window(
         session, lap_number, (STEERING_DEG, YAW_RATE_DPS, SPEED_KMH),
-        min_hz=10, max_gap_s=0.15, tolerance_s=0.01)
+        min_hz=10, max_gap_s=0.15, tolerance_s=0.01, start_s=start_s, end_s=end_s)
     dt = np.diff(t)
     if np.any(weights <= 0) or np.max(abs(dt / np.median(dt) - 1)) > 0.05:
         raise ValueError("Response delay requires a continuous near-uniform matched clock")

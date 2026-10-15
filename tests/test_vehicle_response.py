@@ -133,6 +133,21 @@ def test_reversed_yaw_sign_is_reported_without_inventing_understeer():
     assert result["yaw_gain_dps_per_steering_deg"] == pytest.approx(-0.4)
 
 
+def test_response_window_qualifies_a_stable_speed_section_without_changing_lap():
+    s = response_session()
+    s.channel("speed_kmh").values[:] = vehicle_session().channel("speed_kmh").values
+    with pytest.raises(ValueError, match="speed range"):
+        analyze_steering_response(s, 1)
+    result = analyze_steering_response(s, 1, start_s=4, end_s=9)
+    assert result["observed_delay_s"] == pytest.approx(0.2)
+    assert result["lap"]["duration_s"] == 10
+    assert result["quality"]["analysis_window_s"] == [4, 9]
+    with pytest.raises(ValueError, match="inside"):
+        analyze_steering_response(s, 1, start_s=9, end_s=11)
+    with pytest.raises(ValueError, match="both"):
+        analyze_steering_response(s, 1, start_s=4)
+
+
 @pytest.mark.parametrize("case", ["gps_yaw", "slow_native", "nan", "frozen", "speed"])
 def test_response_rejects_unreliable_evidence(case):
     s = response_session()
