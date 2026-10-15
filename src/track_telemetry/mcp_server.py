@@ -20,10 +20,10 @@ from .channels import (
     GPS_LATITUDE_DEG,
     GPS_LONGITUDE_DEG,
     LONG_G,
-    VERT_G,
     SPEED_KMH,
     STEERING_DEG,
     THROTTLE_PCT,
+    VERT_G,
     YAW_RATE_DPS,
 )
 from .geometry import latlon_to_xy_m
