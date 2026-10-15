@@ -34,4 +34,5 @@ jobs:
         run: python -m ruff check .
 
       - name: Pytest
+        if: always()
         run: python -m pytest -q
