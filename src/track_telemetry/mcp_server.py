@@ -188,6 +188,7 @@ def _session_capabilities(session: TelemetrySession) -> dict[str, Any]:
         "gps_trace": has_gps_trace,
         "speed": has_speed,
         "longitudinal_g": LONG_G in channels,
+        "vertical_g": VERT_G in channels,
         "yaw_rate": has_yaw,
         "independent_yaw_rate": independent_yaw,
         "steering": STEERING_DEG in channels,
