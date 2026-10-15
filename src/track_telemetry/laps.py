@@ -6,18 +6,20 @@ from typing import Any
 
 import numpy as np
 
+from .alignment import align_laps
 from .channels import (
     ACCELERATOR_PCT,
+    BRAKE_POS_PCT,
     BRAKE_PRESSURE_KPA,
     GPS_LATITUDE_DEG,
     GPS_LONGITUDE_DEG,
     LAT_G,
     LONG_G,
     SPEED_KMH,
+    STEERING_DEG,
     THROTTLE_PCT,
     YAW_RATE_DPS,
 )
-from .alignment import align_laps
 from .controls import select_power_control
 from .geometry import cumulative_distance_m, latlon_to_xy_m
 from .models import Lap, TelemetrySession
@@ -196,13 +198,87 @@ def section_metrics(
             result["exit_accelerator_pct"] = exit_control
             result["full_accelerator_reapply_progress"] = reapply_progress
 
-    if session.optional_channel(BRAKE_PRESSURE_KPA) is not None:
-        brake = _channel_on_progress(session, lap, BRAKE_PRESSURE_KPA, grid)
-        result["peak_brake_pressure_kpa"] = (
-            float(np.nanmax(brake)) if np.any(np.isfinite(brake)) else None
-        )
-        onset = np.flatnonzero(brake >= 100.0)
-        result["brake_onset_progress"] = float(grid[onset[0]]) if len(onset) else None
+    # Event order matters more for coaching than isolated peak values.
+    timeline: dict[str, float | str | None] = {
+        "brake_onset_progress": None,
+        "peak_brake_progress": None,
+        "brake_release_start_progress": None,
+        "brake_end_progress": None,
+        "steering_onset_progress": None,
+        "steering_unwind_progress": None,
+        "first_power_reapply_progress": None,
+        "full_power_reapply_progress": result.get("full_control_reapply_progress"),
+        "brake_steering_overlap_fraction": None,
+        "brake_control_source": None,
+    }
+    brake_channel = session.optional_channel(BRAKE_PRESSURE_KPA)
+    brake_name = BRAKE_PRESSURE_KPA
+    brake_threshold = 100.0
+    if brake_channel is None:
+        brake_channel = session.optional_channel(BRAKE_POS_PCT)
+        brake_name = BRAKE_POS_PCT
+        brake_threshold = 3.0
+    brake_active = np.zeros(len(grid), dtype=bool)
+    if brake_channel is not None:
+        brake = _channel_on_progress(session, lap, brake_name, grid)
+        brake_active = np.isfinite(brake) & (brake >= brake_threshold)
+        timeline["brake_control_source"] = brake_name
+        onset = np.flatnonzero(brake_active)
+        if len(onset):
+            onset_i = int(onset[0])
+            timeline["brake_onset_progress"] = float(grid[onset_i])
+            result["brake_onset_progress"] = float(grid[onset_i])
+            finite_after = np.where(np.isfinite(brake[onset_i:]), brake[onset_i:], -np.inf)
+            peak_i = onset_i + int(np.argmax(finite_after))
+            timeline["peak_brake_progress"] = float(grid[peak_i])
+            # Event boundaries below are threshold crossings after peak pressure.
+            release = np.flatnonzero(
+                np.isfinite(brake[peak_i:]) & (brake[peak_i:] <= 0.9 * brake[peak_i])
+            )
+            if len(release):
+                timeline["brake_release_start_progress"] = float(grid[peak_i + release[0]])
+            finished = np.flatnonzero(
+                np.isfinite(brake[peak_i:]) & (brake[peak_i:] < brake_threshold)
+            )
+            if len(finished):
+                timeline["brake_end_progress"] = float(grid[peak_i + finished[0]])
+        if brake_name == BRAKE_PRESSURE_KPA:
+            result["peak_brake_pressure_kpa"] = _safe_stat(brake, "max")
+        else:
+            result["peak_brake_position_pct"] = _safe_stat(brake, "max")
+
+    steering_ch = session.optional_channel(STEERING_DEG)
+    if steering_ch is not None:
+        steering = _channel_on_progress(session, lap, STEERING_DEG, grid)
+        steering_abs = np.abs(steering)
+        active = np.isfinite(steering_abs) & (steering_abs >= 10.0)
+        onset = np.flatnonzero(active)
+        if len(onset):
+            timeline["steering_onset_progress"] = float(grid[onset[0]])
+            peak_i = int(np.nanargmax(steering_abs))
+            lower = np.flatnonzero(
+                np.isfinite(steering_abs[peak_i:])
+                & (steering_abs[peak_i:] <= 0.5 * steering_abs[peak_i])
+            )
+            if len(lower):
+                timeline["steering_unwind_progress"] = float(grid[peak_i + lower[0]])
+            if brake_channel is not None:
+                timeline["brake_steering_overlap_fraction"] = float(np.mean(active & brake_active))
+
+    if control_source is not None and control_channel is not None:
+        control = _channel_on_progress(session, lap, control_source, grid)
+        valid = control[np.isfinite(control)]
+        if len(valid):
+            # A modest rise after vmin is distinct from reaching >=90% power control.
+            threshold = min(90.0, float(np.nanmin(valid)) + 10.0)
+            first = np.flatnonzero(
+                (np.arange(len(grid)) >= min_i)
+                & np.isfinite(control)
+                & (control >= threshold)
+            )
+            if len(first):
+                timeline["first_power_reapply_progress"] = float(grid[first[0]])
+    result["driver_input_timeline"] = timeline
 
     return result
 
