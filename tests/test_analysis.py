@@ -157,6 +157,7 @@ def _incident_session(power_channel: str = THROTTLE_PCT) -> TelemetrySession:
     return TelemetrySession(
         session_id="incident",
         source="synthetic",
+        metadata={"yaw_rate_source": "can"},
         channels={
             GPS_LATITUDE_DEG: _channel(GPS_LATITUDE_DEG, t, lat, "deg"),
             GPS_LONGITUDE_DEG: _channel(GPS_LONGITUDE_DEG, t, lon, "deg"),
