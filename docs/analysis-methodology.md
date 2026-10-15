@@ -82,6 +82,15 @@ MCP mapping:
 
 Do not scan every specialized tool before finding the important loss areas.
 
+### Visualize the location of loss
+
+For meaningful same-layout lap comparisons, use render_lap_comparison to
+create GPS trajectory, V-S on the same physical reference distance, and
+cumulative signed Delta T. Use P2 G, inputs or health figures only when
+relevant to a specific question. Inspect sample rate, alignment confidence
+and skipped plot metadata before interpreting curves. A figure is not
+causal proof and interpolation is not a new sensor measurement.
+
 ## 4. Treat consistency as a first-class metric
 
 Do not optimize only for one hero lap.
