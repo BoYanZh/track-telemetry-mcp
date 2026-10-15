@@ -28,7 +28,11 @@ from track_telemetry.channels import (
     THROTTLE_PCT,
 )
 from track_telemetry.models import ChannelSeries, Lap, TelemetrySession
-from track_telemetry.report_plots import _style_gg_axes, render_lap_comparison, render_session_report
+from track_telemetry.report_plots import (
+    _style_gg_axes,
+    render_lap_comparison,
+    render_session_report,
+)
 
 
 def _session(
