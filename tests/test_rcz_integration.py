@@ -11,7 +11,7 @@ import numpy as np
 from mcp import Client
 
 from track_telemetry import mcp_server
-from track_telemetry.channels import GPS_LATITUDE_DEG, SPEED_KMH
+from track_telemetry.channels import GPS_LATITUDE_DEG, LAP_NUMBER, SPEED_KMH
 from track_telemetry.laps import fastest_timed_lap
 from track_telemetry.motec_adapter import discover_rcz_stints, load_all_rcz_stints, load_rcz
 
@@ -128,6 +128,9 @@ def test_multi_stint_archive_discovers_and_preserves_original_lap_numbers(tmp_pa
     assert merged.lap(22).original_number == 22
     assert merged.lap(22).duration_s == 35.0
     assert merged.lap(22).start_s == 7220.0
+    number_channel = merged.channel(LAP_NUMBER)
+    at_l22 = np.argmin(np.abs(number_channel.timestamps - 7230.0))
+    assert number_channel.values[at_l22] == 22
     assert merged.channel(SPEED_KMH).sample_rate_hz == 1.0
     assert fastest_timed_lap(merged).number == 22
     assert len({lap.number for lap in merged.laps}) == len(merged.laps)
