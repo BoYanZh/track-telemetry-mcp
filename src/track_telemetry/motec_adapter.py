@@ -363,15 +363,44 @@ def load_all_rcz_stints(path: str | Path) -> TelemetrySession:
             "stints": stint_info,
         }
     )
-    sources = {
-        stint: str(session.metadata.get("yaw_rate_source", "unknown"))
+    metadata["device_summary_by_stint"] = inspect_rcz_devices(source)
+    for source_key in (
+        "gps_source",
+        "lateral_accel_source",
+        "longitudinal_accel_source",
+        "vertical_accel_source",
+        "yaw_rate_source",
+    ):
+        sources = {
+            stint: str(session.metadata.get(source_key, "unknown"))
+            for stint, _, session in parts
+        }
+        metadata[f"{source_key}_by_stint"] = sources
+        if len(set(sources.values())) != 1:
+            # Do not claim a single sensor/provenance for a mixed day.
+            metadata[source_key] = "mixed_or_unknown"
+    metadata["channel_provenance_by_stint"] = {
+        stint: {
+            name: (
+                session.metadata.get("gps_source", "unknown")
+                if name in {
+                    out.GPS_LATITUDE_DEG,
+                    out.GPS_LONGITUDE_DEG,
+                    out.GPS_HEADING_DEG,
+                    out.SPEED_KMH,
+                }
+                else session.metadata.get("lateral_accel_source", "unknown")
+                if name == out.LAT_G
+                else session.metadata.get("longitudinal_accel_source", "unknown")
+                if name == out.LONG_G
+                else session.metadata.get("yaw_rate_source", "unknown")
+                if name == out.YAW_RATE_DPS
+                else "rcz_can_obd_or_derived"
+            )
+            for name in session.channels
+        }
         for stint, _, session in parts
     }
-    metadata["yaw_rate_source_by_stint"] = sources
-    if len(set(sources.values())) != 1:
-        # Aggregation must not falsely advertise independent yaw for a day
-        # that includes GPS-derived yaw or unknown provenance.
-        metadata["yaw_rate_source"] = "mixed_or_unknown"
 
     laps.sort(key=lambda lap: (lap.start_s, lap.end_s))
     return TelemetrySession(
