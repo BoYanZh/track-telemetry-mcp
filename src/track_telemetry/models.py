@@ -19,6 +19,7 @@ class Lap:
     end_s: float
     duration_s: float
     original_number: int | None = None
+    stint: int | None = None
 
     @property
     def is_timed(self) -> bool:
@@ -33,6 +34,7 @@ class Lap:
             "end_s": self.end_s,
             "duration_s": self.duration_s,
             "original_number": self.original_number,
+            "stint": self.stint,
         }
 
 
