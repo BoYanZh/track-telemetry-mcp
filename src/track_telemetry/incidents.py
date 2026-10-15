@@ -25,6 +25,7 @@ from .geometry import (
     wrap_degrees,
 )
 from .models import TelemetrySession
+from .slip_angle import yaw_is_independent
 
 
 def _first_index(mask: np.ndarray, start: int = 0, stop: int | None = None) -> int | None:
@@ -64,6 +65,11 @@ def analyze_incident(
     """
     if end_s <= start_s:
         raise ValueError("end_s must be greater than start_s")
+    yaw_source = str(session.metadata.get("yaw_rate_source", "unknown"))
+    if not yaw_is_independent(yaw_source):
+        raise ValueError(
+            f"Incident sideslip reconstruction requires verified independent yaw; got {yaw_source!r}"
+        )
 
     lat_ch = session.channel(GPS_LATITUDE_DEG)
     lon_ch = session.channel(GPS_LONGITUDE_DEG)
@@ -87,6 +93,8 @@ def analyze_incident(
     travel = travel_heading_deg(x, y, half_window=5)
     yaw = session.channel(YAW_RATE_DPS).interp(t)
     speed = session.channel(SPEED_KMH).interp(t)
+    if not np.all(np.isfinite(yaw)):
+        raise ValueError("Yaw rate has missing samples in the requested window; cannot reconstruct incident")
     steer_ch = session.optional_channel(STEERING_DEG)
     steer = steer_ch.interp(t) if steer_ch is not None else np.full_like(t, np.nan)
     control_source, control_ch = select_power_control(
@@ -109,7 +117,7 @@ def analyze_incident(
         anchor_i = int(finite_heading[0])
     body = integrate_body_heading_deg(
         t,
-        np.nan_to_num(yaw, nan=0.0),
+        yaw,
         float(travel[anchor_i]),
         anchor_index=anchor_i,
         yaw_sign=yaw_sign,
