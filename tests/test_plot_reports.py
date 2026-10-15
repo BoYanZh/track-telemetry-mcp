@@ -28,7 +28,7 @@ from track_telemetry.channels import (
     THROTTLE_PCT,
 )
 from track_telemetry.models import ChannelSeries, Lap, TelemetrySession
-from track_telemetry.report_plots import render_lap_comparison, render_session_report
+from track_telemetry.report_plots import _style_gg_axes, render_lap_comparison, render_session_report
 
 
 def _session(
@@ -132,6 +132,41 @@ def test_p2_generates_gg_g_traces_controls_and_health(tmp_path: Path) -> None:
     assert result["channel_quality"][ENGINE_OIL_PRESSURE_KPA]["samples"] == 301
     _verify_png_files(result)
     assert result["plot_files"]["vehicle_health"].endswith("_vehicle_health.png")
+
+
+def test_gg_axes_have_equal_units_symmetric_bounds_and_half_g_rings() -> None:
+    from matplotlib.figure import Figure
+    from matplotlib.patches import Circle
+
+    fig = Figure(figsize=(7, 7))
+    ax = fig.subplots()
+    limit = _style_gg_axes(
+        ax, np.array([-1.27, 0.35]), np.array([-1.7, 1.45])
+    )
+    assert limit == pytest.approx(2.0)
+    assert ax.get_xlim() == pytest.approx((-2.0, 2.0))
+    assert ax.get_ylim() == pytest.approx((-2.0, 2.0))
+    assert ax.get_aspect() == pytest.approx(1.0)
+    circles = [patch for patch in ax.patches if isinstance(patch, Circle)]
+    assert [circle.radius for circle in circles] == pytest.approx([0.5, 1.0, 1.5, 2.0])
+    assert all(circle.get_fill() is False for circle in circles)
+    assert all(circle.get_linestyle() != "solid" for circle in circles)
+    texts = {item.get_text() for item in ax.texts}
+    assert {"0.5g", "1.0g", "1.5g", "2.0g"}.issubset(texts)
+    assert {
+        "ACCELERATING (+G)", "BRAKING (−G)", "LEFT TURN (−G)", "RIGHT TURN (+G)"
+    }.issubset(texts)
+    assert len(ax.lines) == 2  # the horizontal and vertical zero axes
+
+
+def test_gg_axes_have_minimum_half_g_range() -> None:
+    from matplotlib.figure import Figure
+    from matplotlib.patches import Circle
+
+    ax = Figure().subplots()
+    limit = _style_gg_axes(ax, np.array([0.1]), np.array([-0.2]))
+    assert limit == pytest.approx(0.5)
+    assert len([p for p in ax.patches if isinstance(p, Circle)]) == 1
 
 
 def test_p2_skips_missing_g_and_health_without_fake_values(tmp_path: Path) -> None:
