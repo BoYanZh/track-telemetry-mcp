@@ -202,6 +202,7 @@ def load_all_rcz_stints(path: str | Path) -> TelemetrySession:
                 "timed_lap_count": sum(lap.is_timed for lap in session.laps),
             }
         )
+        lap_id_map: dict[int, int] = {}
         for lap in session.laps:
             original = lap.original_number
             if original is not None and original > 0 and original_counts[original] == 1:
@@ -216,6 +217,7 @@ def load_all_rcz_stints(path: str | Path) -> TelemetrySession:
             if number in used_numbers:
                 raise ValueError(f"Duplicate normalized lap ID {number}")
             used_numbers.add(number)
+            lap_id_map[lap.number] = number
             laps.append(
                 Lap(
                     number=number,
@@ -229,12 +231,18 @@ def load_all_rcz_stints(path: str | Path) -> TelemetrySession:
                 )
             )
         for name, channel in session.channels.items():
+            values = channel.values.copy()
+            if name == out.LAP_NUMBER:
+                # The converter's Lap Number channel contains local stint
+                # indices. Map it to the same public IDs as session.laps.
+                for local_number, global_number in lap_id_map.items():
+                    values[channel.values == float(local_number)] = float(global_number)
             series.setdefault(name, []).append(
                 ChannelSeries(
                     name,
                     channel.units,
                     channel.timestamps + offset_s,
-                    channel.values.copy(),
+                    values,
                 )
             )
 
