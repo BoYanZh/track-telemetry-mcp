@@ -130,9 +130,43 @@ def _load_cached(path: str, mtime_ns: int) -> TelemetrySession:
     return load_all_rcz_stints(path)
 
 
-def _load(raw_path: str) -> TelemetrySession:
+def _load(raw_path: str, stint: int | str = "all") -> TelemetrySession:
     path = _resolve_rcz(raw_path)
-    return _load_cached(str(path), path.stat().st_mtime_ns)
+    session = _load_cached(str(path), path.stat().st_mtime_ns)
+    if stint == "all":
+        return session
+    try:
+        selected = int(stint)
+    except (ValueError, TypeError) as exc:
+        raise ValueError("stint must be a non-negative integer or 'all'") from exc
+    if selected < 0 or isinstance(stint, bool):
+        raise ValueError("stint must be a non-negative integer or 'all'")
+    matching = [
+        item for item in session.metadata.get("stints", [])
+        if item["stint"] == selected
+    ]
+    if not matching:
+        raise ValueError(f"Stint {selected} is not present in this RCZ recording")
+    info = matching[0]
+    channels = {
+        name: sliced
+        for name, channel in session.channels.items()
+        if len(sliced := channel.slice(info["start_s"], info["end_s"]).timestamps)
+    }
+    metadata = dict(session.metadata)
+    metadata["target_stint"] = selected
+    metadata["stints"] = [info]
+    metadata["stint_count"] = 1
+    metadata["yaw_rate_source"] = session.metadata.get(
+        "yaw_rate_source_by_stint", {}
+    ).get(selected, "unknown")
+    return TelemetrySession(
+        session_id=session.session_id,
+        source=session.source,
+        metadata=metadata,
+        laps=[lap for lap in session.laps if lap.stint == selected],
+        channels=channels,
+    )
 
 
 def _session_capabilities(session: TelemetrySession) -> dict[str, Any]:
@@ -280,14 +314,14 @@ def list_sessions() -> dict[str, Any]:
 
 
 @mcp.tool()
-def inspect_session(path: str) -> dict[str, Any]:
+def inspect_session(path: str, stint: int | str = "all") -> dict[str, Any]:
     """Inspect a session before choosing analysis tools.
 
     Use first for RCZ analysis after list_sessions. Returns channels, sample rates, laps,
     PB, and a capability matrix. Do not infer that an analysis is valid merely because a
     similarly named channel exists; consult capabilities/tool_support.
     """
-    session = _load(path)
+    session = _load(path, stint=stint)
     result = session.to_summary()
     pb = fastest_timed_lap(session)
     result["fastest_timed_lap"] = pb.to_dict() if pb is not None else None
@@ -296,24 +330,26 @@ def inspect_session(path: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def prepare_session(path: str) -> dict[str, Any]:
+def prepare_session(path: str, stint: int | str = "all") -> dict[str, Any]:
     """Prepare all stints in an RCZ recording with global RaceChrono lap numbers.
 
+    Use stint="all" (default) for the whole day, or stint=N for one recorded run.
     Use after list_sessions when the agent needs a concise PB/lap/capability summary.
     The returned recommended_tools are availability hints, not an instruction to call all
     of them. Choose only tools relevant to the user's question.
     """
-    return _prepare_session_data(_load(path))
+    return _prepare_session_data(_load(path, stint=stint))
 
 
 @mcp.tool()
-def list_laps(path: str) -> dict[str, Any]:
+def list_laps(path: str, stint: int | str = "all") -> dict[str, Any]:
     """List all stints and original lap numbers across the entire RCZ recording.
 
+    Set stint=N to limit results to one run, or leave "all" for the whole day.
     Use when lap selection matters. Prefer inspect_session/prepare_session first when the
     agent has not yet checked available channels or analysis capabilities.
     """
-    session = _load(path)
+    session = _load(path, stint=stint)
     pb = fastest_timed_lap(session)
     return {
         "session_id": session.session_id,
