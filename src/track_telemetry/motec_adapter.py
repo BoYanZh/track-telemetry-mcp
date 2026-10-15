@@ -394,6 +394,8 @@ def load_all_rcz_stints(path: str | Path) -> TelemetrySession:
                 if name == out.LAT_G
                 else session.metadata.get("longitudinal_accel_source", "unknown")
                 if name == out.LONG_G
+                else session.metadata.get("vertical_accel_source", "unknown")
+                if name == out.VERT_G
                 else session.metadata.get("yaw_rate_source", "unknown")
                 if name == out.YAW_RATE_DPS
                 else "rcz_can_obd_or_derived"
