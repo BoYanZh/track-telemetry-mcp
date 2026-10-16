@@ -8,6 +8,11 @@ Follow `skill/SKILL.md`. Use deterministic telemetry tools for measurement; use 
 
 ## Required workflow
 
+Do not equate timed laps with push laps. Use the candidate-push pool, inspect
+unresolved interruption flags, and prefer external driver/video annotations.
+All-timed timing spread is not evidence of driver inconsistency. Pace screening
+alone confirms neither intent nor absence of traffic.
+
 Start with `analyze_session_debrief` for all supplied files. Confirm the physical
 layout independently before enabling comparisons. Read the evidence and actual
 plots, apply the review steps below, then call `finalize_session_debrief` with

@@ -41,6 +41,10 @@ Prefer repeatability and small steps in fast sections; never prescribe added sli
 Do not promise theoretical gains. If layout is unconfirmed, obtain independent
 confirmation before comparing. Do not stop at plots. Mark coaching complete only
 after updating both reports, evidence hypotheses and the practice plan.
+All-timed-lap spread includes yielding, traffic, warmup and cooldown; it is not
+driver consistency. Use the candidate-push pool and inspect interruption flags.
+Pace screening cannot confirm intent or a clean lap. Prefer driver/video lap_context
+annotations when available, and never label an excluded slow lap as traffic by inference.
 Use finalize_session_debrief with the evidence path and coaching object to
 validate evidence references and write matching completed Markdown/HTML reports.
 Coaching fields: summary, hypotheses and experiments. Each hypothesis needs
@@ -89,10 +93,74 @@ def _physical_section(session, number, profile, label):
     return section_metrics(session, number, float(lo), float(hi))
 
 
-def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, plots=True):
+def _lap_selection(sessions, lap_context):
+    """Separate pace candidates from intent confirmed by external annotations."""
+    allowed = {"confirmed_push", "traffic", "warmup", "cooldown", "unknown"}
+    annotations = {}
+    for item in lap_context or []:
+        key = (item["session"], item["lap"])
+        if key in annotations or item.get("classification") not in allowed:
+            raise ValueError("Duplicate lap context or invalid classification")
+        if not isinstance(key[0], int) or not 0 <= key[0] < len(sessions):
+            raise ValueError("Lap context session index is invalid")
+        try:
+            sessions[key[0]].lap(key[1])
+        except KeyError as exc:
+            raise ValueError("Lap context lap number is invalid") from exc
+        if not item.get("note"):
+            raise ValueError("Lap context requires an external evidence note")
+        annotations[key] = item
+    selection = {}
+    for index, session in enumerate(sessions):
+        timed = [lap for lap in session.laps if lap.is_timed
+                 and np.isfinite(lap.duration_s) and lap.duration_s > 0]
+        known_exclusions = {"traffic", "warmup", "cooldown"}
+        pool = [lap for lap in timed if annotations.get((index, lap.number), {}).get(
+            "classification") not in known_exclusions]
+        best = min((lap.duration_s for lap in pool), default=None)
+        cutoff = best + max(1., best * .02) if best is not None else None
+        for lap in timed:
+            annotation = annotations.get((index, lap.number))
+            classification = annotation["classification"] if annotation else "unknown"
+            if classification in known_exclusions:
+                selected = False
+            elif classification == "confirmed_push":
+                selected = True
+            else:
+                selected = cutoff is not None and lap.duration_s <= cutoff
+                classification = "candidate_push" if selected else "unclassified_slow"
+            selection[index, lap.number] = {
+                "lap": lap.number, "classification": classification,
+                "coaching_eligible": selected, "pace_cutoff_s": cutoff,
+                "intent_confirmed": bool(annotation and annotation["classification"] == "confirmed_push"),
+                "external_context": annotation,
+                "reason": "External context overrides screening" if annotation and annotation["classification"] != "unknown"
+                else "Within best + max(1 s, 2% of best)" if selected
+                else "Outside pace screen; reason unknown, not automatically traffic",
+            }
+    return selection
+
+
+def _interruption_sectors(result):
+    """Flag unusually concentrated loss; do not assign traffic or driver causation."""
+    sectors = result.get("mini_sectors", [])
+    if not sectors:
+        return []
+    delta = np.array([s["a_minus_b_s"] for s in sectors])
+    median = float(np.median(delta))
+    mad = float(np.median(np.abs(delta - median)))
+    threshold = max(.75, median + 4 * 1.4826 * mad)
+    return [{"sector": s["sector"], "loss_s": s["a_minus_b_s"], "screening_threshold_s": threshold,
+             "reason": "Concentrated loss; traffic, yielding, mistake or technique remain unresolved"}
+            for s in sectors if s["a_minus_b_s"] > threshold]
+
+
+def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, plots=True,
+                  lap_context=None):
     """Measure recordings separately, preserving clocks, stint boundaries and source gates."""
     if not sessions:
         raise ValueError("At least one telemetry file is required")
+    selection = _lap_selection(sessions, lap_context)
     output_dir.mkdir(parents=True, exist_ok=True)
     evidence = {"schema_version": 1, "status": "awaiting_agent_interpretation",
                 "same_layout_confirmed": same_layout_confirmed,
@@ -112,6 +180,9 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
             "lap_summaries": [lap_summary(session, lap.number) for lap in laps],
             "excluded_laps": [lap.to_dict() for lap in session.laps if lap not in laps],
             "consistency": _consistency(laps),
+            "lap_selection": [selection[index, lap.number] for lap in laps],
+            "candidate_push_consistency": _consistency(
+                [lap for lap in laps if selection[index, lap.number]["coaching_eligible"]]),
             "stints": [{"stint": stint, "consistency": _consistency(
                 [lap for lap in laps if lap.stint == stint])}
                 for stint in stint_ids],
@@ -121,9 +192,15 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
                 for name in session.channels} for lap in laps},
         })
         evidence["observations"].append({
-            "id": f"session-{index}", "measured": "Recorded timed-lap consistency",
+            "id": f"session-{index}", "measured": "All timed-lap timing spread, not driver consistency",
             "values": _consistency(laps), "confidence": "low" if len(laps) < 3 else "moderate",
             "confounders": CONFOUNDERS})
+        evidence["observations"].append({
+            "id": f"push-pool-{index}", "measured": "Pace-screened candidate-push laps; intent/traffic unverified",
+            "values": {"lap_numbers": [lap.number for lap in laps
+                                       if selection[index, lap.number]["coaching_eligible"]],
+                       "consistency": evidence["sessions"][-1]["candidate_push_consistency"]},
+            "confidence": "low", "confounders": CONFOUNDERS})
     eligible = []
     for index, lap in sorted(candidates, key=lambda item: item[1].duration_s):
         check = _attempt(align_laps, sessions[index], lap, sessions[index], lap, grid_points=201)
@@ -138,9 +215,11 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
                                                 "reference_eligibility": check})
         else:
             eligible.append((index, lap))
-    reference = eligible[0] if eligible else None
+    reference_pool = [(i, lap) for i, lap in eligible if selection[i, lap.number]["coaching_eligible"]]
+    confirmed_pool = [(i, lap) for i, lap in reference_pool if selection[i, lap.number]["intent_confirmed"]]
+    reference = (confirmed_pool or reference_pool or [None])[0]
     evidence["reference"] = ({"session": reference[0], "lap": reference[1].number,
-                             "selection": "Fastest positive timed lap with valid GPS; clean status unverified"}
+                             "selection": "Fastest externally confirmed push lap if supplied; otherwise fastest pace candidate with valid GPS. Clean status unverified."}
                              if reference else None)
     comparisons = []
     if not same_layout_confirmed:
@@ -152,17 +231,22 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
                 continue
             result = _attempt(compare_reference_laps, sessions[index], lap.number,
                               sessions[ri], ref.number, same_layout_confirmed=True)
-            comparisons.append({"session": index, "lap": lap.number, "result": result})
+            flags = _interruption_sectors(result)
+            comparisons.append({"session": index, "lap": lap.number, "result": result,
+                                "coaching_eligible": selection[index, lap.number]["coaching_eligible"],
+                                "possible_interruption_sectors": flags})
     evidence["comparisons"] = comparisons
     ranking = []
     for sector in range(1, 21):
-        values = [(c, s) for c in comparisons for s in c["result"].get("mini_sectors", [])
-                  if s["sector"] == sector]
+        values = [(c, s) for c in comparisons if c["coaching_eligible"]
+                  for s in c["result"].get("mini_sectors", [])
+                  if s["sector"] == sector and sector not in {
+                      f["sector"] for f in c["possible_interruption_sectors"]}]
         if not values:
             continue
         losses = np.array([s["a_minus_b_s"] for _, s in values])
         rates = []
-        for index, lap in eligible:
+        for index, lap in reference_pool:
             observed = sessions[index].channel(GPS_LATITUDE_DEG).slice(lap.start_s, lap.end_s).sample_rate_hz
             native = native_rate(sessions[index], GPS_LATITUDE_DEG, lap.number)
             rates.append(min(observed, native) if observed and native else observed)
@@ -183,11 +267,11 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
         example = rank.pop("example")
         lo, hi = (rank["sector"] - 1) / 20, rank["sector"] / 20
         observation = {"id": f"loss-{len(evidence['observations']) + 1}", **rank,
-                       "measured": "Median signed mini-sector difference from selected reference",
+                       "measured": "Median signed candidate-push mini-sector difference; concentrated-loss flags excluded; intent unverified",
                        "example_selection": "Closest measured loss to the sector median, not the worst outlier",
                        "example_session": example["session"], "example_lap": example["lap"],
                        "physical_section_profile": [p for p in example["result"]["profile"]
-                                                    if lo <= p["progress"] <= hi]}
+                                                    if lo - 1e-9 <= p["progress"] <= hi + 1e-9]}
         evidence["observations"].append(observation)
         profile = observation["physical_section_profile"]
         if len(profile) >= 2:
@@ -207,8 +291,9 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
     diagnostic_laps = list(dict.fromkeys(
         [(o["example_session"], o["example_lap"]) for o in evidence["observations"] if "sector" in o]
         + ([(reference[0], reference[1].number)] if reference else [])))
-    if not diagnostic_laps and candidates:
-        index, lap = min(candidates, key=lambda item: item[1].duration_s)
+    fallback = [(i, lap) for i, lap in candidates if selection[i, lap.number]["coaching_eligible"]]
+    if not diagnostic_laps and fallback:
+        index, lap = min(fallback, key=lambda item: item[1].duration_s)
         diagnostic_laps = [(index, lap.number)]
     evidence["diagnostics"] = []
     for index, number in diagnostic_laps:
@@ -225,7 +310,7 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
                 output_dir / f"session-{index}-lap-{number}.html"))
     if plots and reference and comparisons:
         ri, ref = reference
-        valid = [c for c in comparisons if "mini_sectors" in c["result"]]
+        valid = [c for c in comparisons if c["coaching_eligible"] and "mini_sectors" in c["result"]]
         if valid:
             median_delta = float(np.median([c["result"]["lap_a_minus_b_total_s"] for c in valid]))
             example = min(valid, key=lambda c: abs(c["result"]["lap_a_minus_b_total_s"] - median_delta))
@@ -341,14 +426,32 @@ def _timing_tables(evidence: dict) -> list[str]:
              "| Recording | Stint | Timed laps | Best s | Median s | MAD s |",
              "| --- | --- | --- | --- | --- | --- |"]
     for session in evidence["sessions"]:
-        for label, stats in [("all", session["consistency"])] + [
+        for label, stats in [("all timed", session["consistency"]),
+                             ("candidate push", session["candidate_push_consistency"])] + [
                 (str(s["stint"]), s["consistency"]) for s in session["stints"]]:
             lines.append(f"| {session['index']} | {label} | {stats['count']} | "
                          f"{seconds(stats.get('best_s'))} | {seconds(stats.get('median_s'))} | "
                          f"{seconds(stats.get('mad_s'))} |")
-    lines += ["", "Stint numbers are recorder identifiers. Zero timed laps does not mean zero recording.",
+    lines += ["", "All-timed spread includes traffic, yielding, warmup and cooldown; it is not driver consistency.",
+              "Candidate push is a pace screen, not confirmed intent or a clean-lap claim.",
+              "Stint numbers are recorder identifiers. Zero timed laps does not mean zero recording.",
               "", "| Recording | Source file |", "| --- | --- |"]
     lines += [f"| {s['index']} | {s['summary']['source_name']} |" for s in evidence["sessions"]]
+    lines += ["", "## Lap selection audit", "",
+              "| Recording | Lap | Classification | Coaching eligible | Reason |",
+              "| --- | --- | --- | --- | --- |"]
+    for session in evidence["sessions"]:
+        for lap in session["lap_selection"]:
+            lines.append(f"| {session['index']} | {lap['lap']} | {lap['classification']} | "
+                         f"{lap['coaching_eligible']} | {lap['reason']} |")
+    flagged = [(c, flag) for c in evidence["comparisons"] if c["coaching_eligible"]
+               for flag in c["possible_interruption_sectors"]]
+    if flagged:
+        lines += ["", "## Unresolved candidate-lap sections", "",
+                  "These lap/sector samples are withheld from technique ranking; causes remain unknown.",
+                  "| Recording | Lap | Sector | Delta s | Reason |", "| --- | --- | --- | --- | --- |"]
+        lines += [f"| {c['session']} | {c['lap']} | {flag['sector']} | {flag['loss_s']:.3f} | {flag['reason']} |"
+                  for c, flag in flagged]
     return lines
 
 
@@ -423,6 +526,8 @@ def main():
     analyze.add_argument("--output", required=True, type=Path)
     analyze.add_argument("--same-layout-confirmed", action="store_true")
     analyze.add_argument("--no-plots", action="store_true")
+    analyze.add_argument("--lap-context", type=Path,
+                         help="Optional JSON array of external push/traffic/warmup/cooldown annotations")
     finalize = sub.add_parser("finalize", help="Publish structured hosting-agent coaching")
     finalize.add_argument("evidence", type=Path)
     finalize.add_argument("coaching", type=Path)
@@ -431,7 +536,9 @@ def main():
         print(json.dumps(finalize_debrief(args.evidence, json.loads(args.coaching.read_text(encoding="utf-8")))))
         return
     result = analyze_files(args.files, args.output,
-                           same_layout_confirmed=args.same_layout_confirmed, plots=not args.no_plots)
+                           same_layout_confirmed=args.same_layout_confirmed, plots=not args.no_plots,
+                           lap_context=json.loads(args.lap_context.read_text(encoding="utf-8"))
+                           if args.lap_context else None)
     print(json.dumps({k: v for k, v in result.items() if k != "evidence"}))
     print("Hosting agent: complete both reports using agent-handoff.md; coaching is pending.")
 

@@ -20,8 +20,27 @@ outputs remain confined to TRACK_TELEMETRY_ROOT.
 
 RCZ discovery includes every stint. Other formats reuse TTC adapters and recorded
 lap boundaries. Each file retains its own clock. Invalid/nonpositive/untimed laps
-are excluded explicitly. Consistency includes all positive timed laps and is
-reported separately per stint; traffic laps are not silently removed.
+are excluded explicitly. All-timed timing spread is reported separately per stint
+and must not be interpreted as driver consistency: yielding, warmup, cooldown and
+traffic can all slow an otherwise timed lap.
+
+Coaching ranks only candidate-push laps within each recording's best + max(1 s,
+2% of best). This is a transparent pace heuristic, not proof of intent or clean
+running. Slower laps remain in the evidence as unclassified_slow, not traffic.
+Even a near-PB lap may contain an interruption. Concentrated sector loss above
+max(0.75 s, median sector delta + 4 scaled MAD) is flagged as unresolved and that
+lap/sector is omitted from technique ranking. Flags can represent traffic,
+yielding, a mistake or a real technique issue; the heuristic does not decide why.
+Review flagged sectors with driver/video context rather than silently discarding
+them or interpreting them as driver errors. Do not compare candidate-pool MAD to
+all-lap MAD as evidence of improved driving; screening itself truncates spread.
+
+Optional lap_context annotations are an array of objects with session (zero-based
+input index), lap, classification and an external evidence note. Classifications
+are confirmed_push, traffic, warmup, cooldown or unknown. Explicit context overrides
+pace screening; the reference prefers externally confirmed push laps. Supply the
+array to the MCP tool or use --lap-context context.json in the CLI. Without such
+context, keep push intent and traffic status unconfirmed, even for the fastest lap.
 
 The reference is the fastest timed lap passing GPS self-alignment. This is a
 candidate reference, not a certified clean lap. Cross-lap comparisons must also

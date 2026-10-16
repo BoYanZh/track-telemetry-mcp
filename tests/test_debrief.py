@@ -14,6 +14,66 @@ from track_telemetry.debrief import analyze_files, build_debrief, finalize_debri
 from track_telemetry.models import TelemetrySession
 
 
+def _mixed_pace_session():
+    import numpy as np
+
+    from track_telemetry.models import ChannelSeries, Lap
+
+    parts = [_session(duration, n=601) for duration in (20, 20.5, 23, 40)]
+    channels = {}
+    laps = []
+    offset = 0.
+    for number, part in enumerate(parts, 1):
+        duration = part.laps[0].duration_s
+        laps.append(Lap(number, str(number), "Timed", offset, offset + duration, duration, stint=0))
+        for name, channel in part.channels.items():
+            channels.setdefault(name, []).append((channel.timestamps + offset, channel.values))
+        offset += duration + 5
+    return TelemetrySession("mixed", "mixed", laps=laps, channels={
+        name: ChannelSeries(name, parts[0].channels[name].units,
+                            np.concatenate([t for t, _ in values]),
+                            np.concatenate([v for _, v in values]))
+        for name, values in channels.items()})
+
+
+def test_slow_laps_preserved_but_not_ranked_as_driver_errors(tmp_path):
+    evidence = build_debrief([_mixed_pace_session()], tmp_path, same_layout_confirmed=True,
+                             plots=False)["evidence"]
+    session = evidence["sessions"][0]
+    assert session["consistency"]["count"] == 4
+    assert session["candidate_push_consistency"]["count"] == 2
+    audit = {lap["lap"]: lap for lap in session["lap_selection"]}
+    assert audit[3]["classification"] == "unclassified_slow"
+    assert audit[4]["classification"] == "unclassified_slow"
+    assert not any(lap["intent_confirmed"] for lap in audit.values())
+    assert {c["lap"] for c in evidence["comparisons"] if c["coaching_eligible"]} == {2}
+    assert len(evidence["comparisons"]) == 3
+
+
+def test_external_traffic_and_push_context_override_pace(tmp_path):
+    session = _mixed_pace_session()
+    evidence = build_debrief([session], tmp_path, plots=False, lap_context=[
+        {"session": 0, "lap": 1, "classification": "traffic", "note": "Driver marked yielding"},
+        {"session": 0, "lap": 3, "classification": "confirmed_push", "note": "Driver confirmed push"},
+    ])["evidence"]
+    assert evidence["reference"]["lap"] == 3
+    audit = {lap["lap"]: lap for lap in evidence["sessions"][0]["lap_selection"]}
+    assert not audit[1]["coaching_eligible"]
+    assert audit[3]["coaching_eligible"] and audit[3]["intent_confirmed"]
+    with pytest.raises(ValueError):
+        build_debrief([session], tmp_path, lap_context=[
+            {"session": 0, "lap": 99, "classification": "confirmed_push", "note": "wrong lap"}])
+
+
+def test_concentrated_loss_is_flagged_not_called_traffic():
+    from track_telemetry.debrief import _interruption_sectors
+
+    flags = _interruption_sectors({"mini_sectors": [
+        {"sector": i, "a_minus_b_s": 3. if i == 7 else .05} for i in range(1, 21)]})
+    assert [flag["sector"] for flag in flags] == [7]
+    assert "unresolved" in flags[0]["reason"]
+
+
 def test_comparison_and_section_evidence(tmp_path):
     slow, fast = _session(22), _session(20)
     result = build_debrief([slow, fast], tmp_path, same_layout_confirmed=True, plots=True)
@@ -24,6 +84,7 @@ def test_comparison_and_section_evidence(tmp_path):
     loss = next(o for o in evidence["observations"] if "sector" in o)
     assert loss["section_diagnostics"]["driver"]["control_source"]
     assert loss["confidence"] == "low"
+    assert len(loss["physical_section_profile"]) == 11
     assert evidence["plots"][-1]["generated_plots"]
     for plot in evidence["plots"]:
         for path in plot.get("plot_files", {}).values():

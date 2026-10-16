@@ -777,7 +777,7 @@ def render_incident_player(
 @mcp.tool()
 def analyze_session_debrief(
     paths: list[str], output_dir: str, same_layout_confirmed: bool = False,
-    plots: bool = True,
+    plots: bool = True, lap_context: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """One-shot all-stint measurements, reports and hosting-agent coaching handoff.
 
@@ -791,7 +791,8 @@ def analyze_session_debrief(
     for existing in destination.iterdir():
         _inside_root(existing.resolve())
     result = build_debrief(sessions, destination,
-                           same_layout_confirmed=same_layout_confirmed, plots=plots)
+                           same_layout_confirmed=same_layout_confirmed, plots=plots,
+                           lap_context=lap_context)
     evidence = result.pop("evidence")
     # Full profiles and provenance stay in the artifact, rather than filling agent context.
     result["status"] = evidence["status"]
@@ -799,7 +800,9 @@ def analyze_session_debrief(
     result["reference"] = evidence["reference"]
     result["observations"] = evidence["observations"]
     result["session_consistency"] = [
-        {"index": item["index"], "consistency": item["consistency"], "stints": item["stints"]}
+        {"index": item["index"], "all_timed_spread": item["consistency"],
+         "candidate_push_consistency": item["candidate_push_consistency"],
+         "lap_selection": item["lap_selection"], "stints": item["stints"]}
         for item in evidence["sessions"]]
     result["unavailable_data"] = evidence["unavailable_data"]
     return result

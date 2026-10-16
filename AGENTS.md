@@ -29,6 +29,12 @@ For RaceChrono/RCZ analysis:
 
 Do not call every available tool by default.
 
+Before coaching, distinguish recorded timed laps from candidate push laps.
+Do not interpret yielding, traffic, warmup or cooldown as technique loss or
+all-day timing spread as driver consistency. Pace screening cannot prove intent
+or clean running. Inspect lap-selection/interruption flags and prefer external
+driver/video annotations when available.
+
 ## Tool selection
 
 Use general tools first when appropriate:

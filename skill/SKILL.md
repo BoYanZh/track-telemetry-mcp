@@ -11,6 +11,13 @@ This is the detailed analysis policy for the MCP. Repository-aware agents should
 
 ## Agent contract
 
+Timed does not mean pushing. Use candidate-push selection and inspect concentrated
+loss flags before diagnosing technique. Never label a slow lap as traffic from
+telemetry alone, or call all-timed-lap spread driver inconsistency. Driver/video
+lap_context takes precedence over pace screening. Near-PB pace still does not
+establish a clean lap. Compare equivalent populations; the narrower spread after
+pace filtering is a selection effect, not evidence of improved consistency.
+
 For complete session analysis and coaching, default to `analyze_session_debrief`
 with every supplied file and all stints. Or run `track-telemetry-coach analyze
 FILES --output DIR` in a shell environment. Follow

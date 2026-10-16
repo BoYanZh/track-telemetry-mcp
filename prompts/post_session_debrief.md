@@ -15,6 +15,10 @@ Summarize:
 
 ## Workflow
 
+Separate all-timed timing spread from candidate-push execution. Inspect lap
+selection and interruption flags before ranking losses. Never infer traffic
+or a technique fault from a slow lap alone; use driver/video context when available.
+
 Start with `analyze_session_debrief` using all supplied files and all stints.
 Enable comparisons only after independent physical-layout confirmation. Interpret
 the evidence and inspect actual plots, then use `finalize_session_debrief` to

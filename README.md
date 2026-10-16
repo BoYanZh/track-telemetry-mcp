@@ -8,6 +8,8 @@ Deterministic motorsports telemetry analysis for MCP agents.
 
 - One-shot all-stint session evidence and AI coaching handoff through
   `analyze_session_debrief` or `track-telemetry-coach analyze`.
+- Candidate-push screening with auditable lap context and unresolved local-loss
+  flags, keeping traffic/yielding/warmup uncertainty separate from driver coaching.
 
 - RaceChrono `.rcz` support via [TrackTelemetryConverter](https://github.com/BoYanZh/TrackTelemetryConverter)
 - multi-stint RaceChrono RCZ recordings with all-day PB discovery and stable original lap numbers
