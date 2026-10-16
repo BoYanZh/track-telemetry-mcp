@@ -106,6 +106,9 @@ limitation. Use map-based location descriptions instead of unexplained distance
 ranges. Speed traces retain physical reference-position alignment.
 
 Primary text contains formatted lap times and plain-language practice fields.
+Lead with the few corner areas most worth testing and their map locations.
+The full mini-sector matrix, virtual sums and source-switch audit are collapsed
+under calculation details after the coaching, so they do not bury the action plan.
 Selection details are collapsed; raw measurements and provenance remain in JSON.
 Main maps and speed figures are inline SVG, so the completed HTML can be opened
 as one file without network access or neighboring image files.

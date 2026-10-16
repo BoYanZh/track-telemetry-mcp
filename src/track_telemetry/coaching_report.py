@@ -167,6 +167,8 @@ def render_report(evidence, coaching):
     bodies.append('</tbody></table><p class="note">' + tr(
         "候选快圈只表示配速接近，并不证明当时全力驾驶或没有交通干扰。全部圈时的波动不等于驾驶不稳定。",
         "Pace candidates do not confirm push intent or clear traffic. All-lap spread is not driver inconsistency.") + '</p></section>')
+    calculation_details = ""
+    mini_md = []
     if evidence.get("mini_sector_analysis"):
         from .mini_sector_report import render_mini_sectors
 
@@ -174,10 +176,12 @@ def render_report(evidence, coaching):
                                               lambda i: _session_name(sessions[i], zh), _time, zh)
         sector_map = [{"letter": str(i), "lo": (i - 1) / 20, "hi": i / 20,
                        "color": "#126d82" if i % 2 else "#507c8a"} for i in range(1, 21)]
-        bodies.append('<section><h2>' + tr("二十个区段在这里", "Locate the twenty mini-sectors")
+        calculation_details = ('<details class="calculations"><summary>'
+                      + tr("计算依据：逐圈区段、拼接圈时与接缝检查", "Calculation details: sector matrix and virtual lap")
+                      + '</summary><section><h2>' + tr("二十个区段在这里", "Locate the twenty mini-sectors")
                       + '</h2>' + _map(evidence, sector_map, zh)
                       + '<p class="note">' + tr("数字对应下方矩阵的列，不是官方弯号。", "Numbers match matrix columns, not official corners.") + '</p></section>' + mini_html)
-        md += mini_md
+        calculation_details += '</details>'
     bodies.append('<section id="track"><h2>' + tr("先找到位置，再看诊断", "Locate each finding") + '</h2>'
                   + _map(evidence, zones, zh) + '<div class="map-key">'
                   + "".join(f'<a href="#zone-{z["letter"]}" style="--zone:{z["color"]}">{z["letter"]} · {_escape(z["location"])}</a>' for z in zones)
@@ -247,6 +251,10 @@ def render_report(evidence, coaching):
             bodies.append(paragraphs(hypothesis["explanation"]))
             md += ["", hypothesis["explanation"]]
     bodies.append('</section>')
+    bodies.append(calculation_details)
+    if mini_md:
+        md += ["", "<details>", "<summary>" + tr("计算依据", "Calculation details") + "</summary>",
+               "", *mini_md, "", "</details>"]
     bodies.append('<details><summary>' + tr("查看圈次筛选和测量依据", "Inspect selection and evidence") + '</summary>')
     classifications = {"candidate_push": tr("候选快圈，意图未确认", "Pace candidate"),
                        "unclassified_slow": tr("较慢圈，原因未确认", "Unclassified slower lap"),

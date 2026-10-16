@@ -16,6 +16,10 @@ location sections, with the highlighted GPS map beside each diagnosis and speed
 comparison. Refer to map letters and recognizable mapped positions; do not rely
 on unexplained distance ranges or invent official corner numbers. Supply localized
 title/sections to the finalizer. Raw JSON keys belong in evidence, not human prose.
+Lead with at most three actionable corner areas and a next-session priority.
+Keep the all-lap matrix, virtual sums and boundary-state audit collapsed in the
+calculation appendix. They support the diagnosis; they are not the driver-facing
+answer. Separate observed time differences from achievable or guaranteed gains.
 
 Timed does not mean pushing. Use candidate-push selection and inspect concentrated
 loss flags before diagnosing technique. Never label a slow lap as traffic from

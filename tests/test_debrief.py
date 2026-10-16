@@ -187,6 +187,10 @@ def test_chinese_report_has_spatial_figures_and_no_raw_field_dump(tmp_path):
     assert "<script>" not in document and "&lt;script&gt;" in document
     assert "固定一个参照" in markdown
     assert "未记录机油压力" in document and "未记录机油压力" in markdown
+    assert '<details class="calculations">' in document
+    assert '<details class="calculations" open' not in document
+    assert document.index('id="zone-A"') < document.index('<details class="calculations">')
+    assert document.index('class="sector-matrix"') > document.index('<details class="calculations">')
 
 
 def test_all_stints_and_mcp(tmp_path, monkeypatch):
