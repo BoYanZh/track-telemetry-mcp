@@ -10,6 +10,14 @@ Do not estimate telemetry values manually when an MCP tool can calculate them.
 
 ## Default workflow
 
+For a complete session review or coaching request, call `analyze_session_debrief`
+with all supplied telemetry paths. Independently confirm identical physical
+layouts before enabling comparisons. Read the JSON evidence and actual plots,
+then finish both reports and tailor at most three next-session experiments.
+Do not stop after plot generation or hand back an uncompleted coaching handoff.
+Follow [the one-shot contract](docs/session-debrief.md). Focused questions can
+still use the smaller tool sequence below.
+
 For RaceChrono/RCZ analysis:
 
 1. Call `list_sessions`.

@@ -774,6 +774,53 @@ def render_incident_player(
     }
 
 
+@mcp.tool()
+def analyze_session_debrief(
+    paths: list[str], output_dir: str, same_layout_confirmed: bool = False,
+    plots: bool = True,
+) -> dict[str, Any]:
+    """One-shot all-stint measurements, reports and hosting-agent coaching handoff.
+
+    Independently confirm the layout before comparing. The hosting agent must
+    finish both reports with evidence-backed interpretation and <=3 experiments.
+    """
+    from .debrief import build_debrief
+
+    sessions = [_load(path) for path in paths]
+    destination = _resolve_output(str(Path(output_dir) / "report.html"), ".html").parent
+    for existing in destination.iterdir():
+        _inside_root(existing.resolve())
+    result = build_debrief(sessions, destination,
+                           same_layout_confirmed=same_layout_confirmed, plots=plots)
+    evidence = result.pop("evidence")
+    # Full profiles and provenance stay in the artifact, rather than filling agent context.
+    result["status"] = evidence["status"]
+    result["agent_instructions"] = evidence["agent_instructions"]
+    result["reference"] = evidence["reference"]
+    result["observations"] = evidence["observations"]
+    result["session_consistency"] = [
+        {"index": item["index"], "consistency": item["consistency"], "stints": item["stints"]}
+        for item in evidence["sessions"]]
+    result["unavailable_data"] = evidence["unavailable_data"]
+    return result
+
+
+@mcp.tool()
+def finalize_session_debrief(evidence_path: str, coaching: dict[str, Any]) -> dict[str, Any]:
+    """Validate hosting-agent hypotheses/experiments and write completed MD/HTML reports.
+
+    Requires summary, hypotheses and 1-3 experiments referencing observation_ids.
+    See analyze_session_debrief agent_instructions for required coaching fields.
+    """
+    from .debrief import finalize_debrief
+
+    path = _resolve_existing(evidence_path, {".json"})
+    # Check output destinations too, including existing symlink targets.
+    for name in ("report.md", "report.html", "evidence.json"):
+        _inside_root((path.parent / name).resolve())
+    return finalize_debrief(path, coaching)
+
+
 def main() -> None:
     """Run stdio by default, or Streamable HTTP when requested by environment."""
     _root()

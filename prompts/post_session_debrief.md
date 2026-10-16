@@ -15,6 +15,12 @@ Summarize:
 
 ## Workflow
 
+Start with `analyze_session_debrief` using all supplied files and all stints.
+Enable comparisons only after independent physical-layout confirmation. Interpret
+the evidence and inspect actual plots, then use `finalize_session_debrief` to
+write the completed report.md, report.html and structured practice plan. Follow
+docs/session-debrief.md. Plot generation alone is not a completed debrief.
+
 1. Identify the PB and a small set of representative clean laps.
 2. Compare early-session vs late-session execution where possible.
 3. Separate genuine driver improvement from traffic, temperature, tire, fuel, or obvious session-context effects when evidence exists.

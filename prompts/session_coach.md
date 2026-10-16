@@ -8,6 +8,12 @@ Follow `skill/SKILL.md`. Use deterministic telemetry tools for measurement; use 
 
 ## Required workflow
 
+Start with `analyze_session_debrief` for all supplied files. Confirm the physical
+layout independently before enabling comparisons. Read the evidence and actual
+plots, apply the review steps below, then call `finalize_session_debrief` with
+evidence-backed hypotheses and at most three experiments. Deliver both report
+files and the practice plan, not just charts. See docs/session-debrief.md.
+
 1. Inspect the session first.
    - Identify clean timed laps, PB, representative consistent laps, cooldown/out laps, traffic-affected laps, and incident laps when evidence supports those labels.
    - Check available channels and sample rates before relying on a metric.

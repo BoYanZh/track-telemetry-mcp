@@ -11,6 +11,20 @@ This is the detailed analysis policy for the MCP. Repository-aware agents should
 
 ## Agent contract
 
+For complete session analysis and coaching, default to `analyze_session_debrief`
+with every supplied file and all stints. Or run `track-telemetry-coach analyze
+FILES --output DIR` in a shell environment. Follow
+[`docs/session-debrief.md`](../docs/session-debrief.md). Never infer same-layout
+confirmation from a track name. Without independent confirmation, report timing
+and consistency and explain the comparison limitation.
+
+The deterministic workflow returns `awaiting_agent_interpretation`. Read the
+evidence and inspect actual plots, then update report.md, report.html and JSON
+hypotheses/practice_plan. Cite observations, confidence and confounders; prescribe
+at most three experiments with location, baseline, one behavior, success measure,
+abort criteria and re-test. Do not deliver a plot bundle as completed coaching.
+No particular LLM provider is required. Focused requests retain the tools below.
+
 For RCZ work, the default sequence is:
 
 ```text

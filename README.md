@@ -6,6 +6,9 @@ Deterministic motorsports telemetry analysis for MCP agents.
 
 ## Highlights
 
+- One-shot all-stint session evidence and AI coaching handoff through
+  `analyze_session_debrief` or `track-telemetry-coach analyze`.
+
 - RaceChrono `.rcz` support via [TrackTelemetryConverter](https://github.com/BoYanZh/TrackTelemetryConverter)
 - multi-stint RaceChrono RCZ recordings with all-day PB discovery and stable original lap numbers
 - lap/PB discovery and lap summaries
@@ -46,6 +49,19 @@ Use only the extras you need:
 - `viz` — optional headless Matplotlib HTML/PNG telemetry visualization
 
 ## Run
+
+For complete coaching, give your agent this repository and telemetry attachments.
+Ask it to follow [the one-shot workflow](docs/session-debrief.md), interpret the
+measurements and deliver both reports with at most three next-session experiments.
+
+```bash
+track-telemetry-coach analyze session.rcz --output debrief
+```
+
+This creates report.md, report.html, evidence.json, available plots and a
+hosting-agent handoff. Python calculates; the hosting agent finishes nuanced
+coaching. The CLI does not call an LLM or label a draft as completed coaching.
+Enable `--same-layout-confirmed` only after independent layout confirmation.
 
 The default transport is stdio.
 

@@ -2,6 +2,11 @@
 
 This document defines the default review process for driver telemetry in this repository.
 
+For full debriefs, start with `analyze_session_debrief` and follow
+[the report completion contract](session-debrief.md). Interpret the resulting
+evidence and finish both reports with at most three testable experiments.
+Plots alone do not satisfy a complete coaching request.
+
 The goal is not to inspect every channel. The goal is to find the largest credible time loss, explain it with the smallest useful set of measurements, and turn it into a small number of testable driving changes.
 
 ## Review loop

@@ -35,6 +35,7 @@ dev = [
 
 [project.scripts]
 track-telemetry-mcp = "track_telemetry.mcp_server:main"
+track-telemetry-coach = "track_telemetry.debrief:main"
 
 [project.urls]
 Repository = "https://github.com/BoYanZh/track-telemetry-mcp"
