@@ -42,7 +42,9 @@ Do not promise theoretical gains. If layout is unconfirmed, obtain independent
 confirmation before comparing. Do not stop at plots. Mark coaching complete only
 after updating both reports, evidence hypotheses and the practice plan.
 All-timed-lap spread includes yielding, traffic, warmup and cooldown; it is not
-driver consistency. Use the candidate-push pool and inspect interruption flags.
+driver consistency. Use candidate-push laps for whole-lap execution review, but
+use all eligible local mini-sectors for virtual-best analysis, including good
+sections on otherwise slower laps. Inspect context and interruption flags.
 Pace screening cannot confirm intent or a clean lap. Prefer driver/video lap_context
 annotations when available, and never label an excluded slow lap as traffic by inference.
 Use finalize_session_debrief with the evidence path and coaching object to
@@ -246,60 +248,45 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
                                 "coaching_eligible": selection[index, lap.number]["coaching_eligible"],
                                 "possible_interruption_sectors": flags})
     evidence["comparisons"] = comparisons
-    ranking = []
-    for sector in range(1, 21):
-        values = [(c, s) for c in comparisons if c["coaching_eligible"]
-                  for s in c["result"].get("mini_sectors", [])
-                  if s["sector"] == sector and sector not in {
-                      f["sector"] for f in c["possible_interruption_sectors"]}]
-        if not values:
-            continue
-        losses = np.array([s["a_minus_b_s"] for _, s in values])
-        rates = []
-        for index, lap in reference_pool:
-            observed = sessions[index].channel(GPS_LATITUDE_DEG).slice(lap.start_s, lap.end_s).sample_rate_hz
-            native = native_rate(sessions[index], GPS_LATITUDE_DEG, lap.number)
-            rates.append(min(observed, native) if observed and native else observed)
-        timing_floor = max((1 / rate for rate in rates if rate), default=1.)
-        median = float(np.median(losses))
-        support = int(np.count_nonzero(losses > timing_floor))
-        if median <= timing_floor:
-            continue
-        ranking.append({"sector": sector, "median_loss_s": median,
-                        "screening_resolution_s": timing_floor,
-                        "resolution_note": "One GPS interval screening floor using the lower observed/native rate where known; not a statistical error bound. Unknown native rates remain unknown.",
-                        "repeat_count": support, "compared_laps": len(values),
-                        "confidence": "moderate" if support >= 2 and support / len(values) >= .75 else "low",
-                        "confounders": CONFOUNDERS,
-                        "example": min(values, key=lambda item: abs(item[1]["a_minus_b_s"] - median))[0]})
-    ranking.sort(key=lambda item: item["median_loss_s"], reverse=True)
-    for rank in ranking[:3]:
-        example = rank.pop("example")
-        lo, hi = (rank["sector"] - 1) / 20, rank["sector"] / 20
-        observation = {"id": f"loss-{len(evidence['observations']) + 1}", **rank,
-                       "measured": "Median signed candidate-push mini-sector difference; concentrated-loss flags excluded; intent unverified",
-                       "example_selection": "Closest measured loss to the sector median, not the worst outlier",
-                       "example_session": example["session"], "example_lap": example["lap"],
-                       "physical_section_profile": [p for p in example["result"]["profile"]
-                                                    if lo - 1e-9 <= p["progress"] <= hi + 1e-9]}
-        evidence["observations"].append(observation)
-        profile = observation["physical_section_profile"]
-        if len(profile) >= 2:
-            ri, ref = reference
+    if same_layout_confirmed and reference:
+        from .mini_sectors import analyze_mini_sectors
+
+        self_comparison = _attempt(compare_reference_laps, sessions[ri], ref.number,
+                                   sessions[ri], ref.number, same_layout_confirmed=True)
+        if "mini_sectors" in self_comparison:
+            evidence["mini_sector_analysis"] = analyze_mini_sectors(
+                comparisons, self_comparison, ri, selection)
+            composite = evidence["mini_sector_analysis"]["combined"]
+            evidence["observations"].append({"id": "mini-sector-composite",
+                "measured": "Sum of eligible fastest measured mini-sectors; not a continuous or guaranteed lap",
+                "values": {key: composite.get(key) for key in
+                           ("virtual_best_s", "best_whole_lap_s", "arithmetic_gap_s")},
+                "confidence": "low", "confounders": CONFOUNDERS})
+    if evidence.get("mini_sector_analysis"):
+        from .mini_sectors import opportunity_profiles
+
+        for observation in opportunity_profiles(evidence["mini_sector_analysis"], comparisons,
+                                                self_comparison, ri):
+            profile = observation["physical_section_profile"]
+            donor = observation["section_reference"]
+            observation["confounders"] = CONFOUNDERS
             observation["section_diagnostics"] = {
-                "driver": _attempt(_physical_section, sessions[example["session"]],
-                                   example["lap"], profile, "a"),
-                "reference": _attempt(_physical_section, sessions[ri], ref.number, profile, "b")}
-        evidence["practice_plan"].append({
-            "observation_id": observation["id"], "status": "agent_to_tailor",
-            "location": f"Reference GPS progress {lo:.2f}-{hi:.2f}",
-            "experiment": "Establish repeatable baseline using one consistent visual marker.",
-            "measure": "Compare section time and spread over three clear, comparable laps.",
-            "abort": "Traffic, flags, reduced control margin or instructor concern.",
-            "success": "Reduced spread while maintaining control margin."})
+                "driver": _attempt(_physical_section, sessions[observation["example_session"]],
+                                   observation["example_lap"], profile, "a"),
+                "reference": _attempt(_physical_section, sessions[donor["session"]], donor["lap"], profile, "b")}
+            evidence["observations"].append(observation)
+            evidence["practice_plan"].append({
+                "observation_id": observation["id"], "status": "agent_to_tailor",
+                "location": f"Mini-sector {observation['sector']}, locate on GPS map",
+                "experiment": "Review why the best actual lap differs from the recorded sector donor.",
+                "measure": "Compare entry, exit and the adjoining sector before changing one action.",
+                "abort": "Traffic, flags, reduced control margin or instructor concern.",
+                "success": "Repeatable execution without degrading the adjoining section."})
     evidence["time_loss_ranking"] = [o["id"] for o in evidence["observations"] if "sector" in o]
     diagnostic_laps = list(dict.fromkeys(
         [(o["example_session"], o["example_lap"]) for o in evidence["observations"] if "sector" in o]
+        + [(o["section_reference"]["session"], o["section_reference"]["lap"])
+           for o in evidence["observations"] if "section_reference" in o]
         + ([(reference[0], reference[1].number)] if reference else [])))
     fallback = [(i, lap) for i, lap in candidates if selection[i, lap.number]["coaching_eligible"]]
     if not diagnostic_laps and fallback:
@@ -344,8 +331,8 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
     for obs in evidence["observations"]:
         if "sector" not in obs:
             continue
-        lines.append(f"- {obs['id']}: sector {obs['sector']}, median difference "
-                     f"{obs['median_loss_s']:.3f} s, confidence {obs['confidence']}.")
+        lines.append(f"- {obs['id']}: sector {obs['sector']}, best-lap section deficit "
+                     f"{obs['measured_difference_s']:.3f} s, confidence {obs['confidence']}.")
     lines += ["", "## Hypotheses and uncertainty", "", *CONFOUNDERS,
               "No driver-causation hypothesis has been established automatically.",
               "", "## Next-session practice plan", ""]

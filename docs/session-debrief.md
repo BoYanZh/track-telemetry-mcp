@@ -24,7 +24,7 @@ are excluded explicitly. All-timed timing spread is reported separately per stin
 and must not be interpreted as driver consistency: yielding, warmup, cooldown and
 traffic can all slow an otherwise timed lap.
 
-Coaching ranks only candidate-push laps within each recording's best + max(1 s,
+Whole-lap execution review screens candidate-push laps within each recording's best + max(1 s,
 2% of best). This is a transparent pace heuristic, not proof of intent or clean
 running. Slower laps remain in the evidence as unclassified_slow, not traffic.
 Even a near-PB lap may contain an interruption. Concentrated sector loss above
@@ -42,12 +42,22 @@ pace screening; the reference prefers externally confirmed push laps. Supply the
 array to the MCP tool or use --lap-context context.json in the CLI. Without such
 context, keep push intent and traffic status unconfirmed, even for the fastest lap.
 
-The reference is the fastest timed lap passing GPS self-alignment. This is a
-candidate reference, not a certified clean lap. Cross-lap comparisons must also
-pass existing physical GPS alignment gates. Loss ranking uses median signed
-mini-sector differences over eligible comparisons, repeat support and cautious
-confidence. Diagnostic examples use losses closest to the sector median,
-rather than extreme slow laps. No theoretical-best sum or promised time saving is produced.
+The reference supplies common physical coordinates, not a performance ceiling.
+It prefers externally confirmed push laps, otherwise the fastest candidate
+passing GPS self-alignment. Cross-lap comparisons must pass alignment gates.
+All valid timed laps contribute eligible local mini-sectors, including otherwise
+slower laps: whole-lap pace is not a local exclusion. Explicit traffic/warmup/
+cooldown context excludes a lap; unresolved concentrated loss excludes only the
+affected sample. The report contains the all-lap matrix, fastest-sector donor,
+near-best count within 0.1 s, second-fastest sample and virtual sums per file and
+combined. These are optimistic combinations of recorded intervals, not a driven
+lap or guaranteed time gain. Cross-day conditions remain unverified.
+
+At every source switch, entry/exit speeds are compared, including the wrap across
+the finish line. A difference above 5 km/h is flagged for review. Matching speeds
+do not prove compatible lines, steering, grip or vehicle states. The top diagnostic
+sections compare the fastest actual whole lap with that section's fastest donor
+on the same physical reference grid, rather than a median slow-lap example.
 Section control timing maps physical reference boundaries back to each lap.
 Diagnostics reuse source-gated G-G, braking, wheel-speed and steering functions.
 Unavailable metrics retain reasons rather than zero values.

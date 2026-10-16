@@ -798,6 +798,8 @@ def analyze_session_debrief(
     result["status"] = evidence["status"]
     result["agent_instructions"] = evidence["agent_instructions"]
     result["reference"] = evidence["reference"]
+    if "mini_sector_analysis" in evidence:
+        result["mini_sector_summary"] = evidence["mini_sector_analysis"]["combined"]
     result["observations"] = evidence["observations"]
     result["session_consistency"] = [
         {"index": item["index"], "all_timed_spread": item["consistency"],

@@ -8,6 +8,8 @@ Deterministic motorsports telemetry analysis for MCP agents.
 
 - One-shot all-stint session evidence and AI coaching handoff through
   `analyze_session_debrief` or `track-telemetry-coach analyze`.
+- All-lap physical mini-sector matrix, fastest-source tracking and per-recording /
+  combined virtual-best sums, with boundary-state warnings rather than promised gains.
 - Candidate-push screening with auditable lap context and unresolved local-loss
   flags, keeping traffic/yielding/warmup uncertainty separate from driver coaching.
 

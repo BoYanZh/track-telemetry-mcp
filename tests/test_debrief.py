@@ -75,7 +75,7 @@ def test_concentrated_loss_is_flagged_not_called_traffic():
 
 
 def test_comparison_and_section_evidence(tmp_path):
-    slow, fast = _session(22), _session(20)
+    slow, fast = _session(21, warped=True), _session(20)
     result = build_debrief([slow, fast], tmp_path, same_layout_confirmed=True, plots=True)
     evidence = result["evidence"]
     assert evidence["reference"]["session"] == 1
@@ -83,7 +83,7 @@ def test_comparison_and_section_evidence(tmp_path):
     assert len(evidence["practice_plan"]) <= 3
     loss = next(o for o in evidence["observations"] if "sector" in o)
     assert loss["section_diagnostics"]["driver"]["control_source"]
-    assert loss["confidence"] == "low"
+    assert loss["loss_metric"] == "best_whole_lap_minus_sector_best"
     assert len(loss["physical_section_profile"]) == 11
     assert evidence["plots"][-1]["generated_plots"]
     for plot in evidence["plots"]:
@@ -100,13 +100,14 @@ def test_unconfirmed_layout_never_compares(tmp_path):
     assert result["unavailable_data"]
 
 
-def test_diagnostics_use_representative_loss_instead_of_outlier(tmp_path):
-    evidence = build_debrief([_session(21, n=601), _session(22, n=601),
+def test_diagnostics_target_best_lap_against_fastest_sector_source(tmp_path):
+    evidence = build_debrief([_session(21, warped=True, n=601), _session(22, n=601),
                              _session(40, n=601), _session(20, n=601)],
                              tmp_path, same_layout_confirmed=True, plots=False)["evidence"]
     losses = [o for o in evidence["observations"] if "sector" in o]
     assert losses
-    assert all(o["example_session"] == 1 for o in losses)
+    assert all(o["example_session"] == 3 for o in losses)
+    assert any(o["section_reference"]["session"] == 0 for o in losses)
 
 
 def test_missing_gps_and_no_laps(tmp_path):
@@ -162,7 +163,7 @@ def test_finalization_validates_before_publishing(tmp_path):
 def test_chinese_report_has_spatial_figures_and_no_raw_field_dump(tmp_path):
     from track_telemetry.coaching_report import render_report
 
-    evidence = build_debrief([_session(22), _session(20)], tmp_path,
+    evidence = build_debrief([_session(21, warped=True), _session(20)], tmp_path,
                              same_layout_confirmed=True, plots=False)["evidence"]
     assert len(evidence["reference_geometry"]["points"]) > 10
     loss = next(o for o in evidence["observations"] if "sector" in o)

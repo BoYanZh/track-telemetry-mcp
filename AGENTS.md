@@ -30,6 +30,11 @@ For RaceChrono/RCZ analysis:
 Do not call every available tool by default.
 
 Before coaching, distinguish recorded timed laps from candidate push laps.
+Use the all-lap physical mini-sector matrix and source-labeled virtual-best
+composite as the primary opportunity analysis. Good local sections can come from
+otherwise slow laps. The spatial reference is a coordinate system, not a claim
+that its driver performance is fastest everywhere. Inspect boundary-state
+discontinuities before proposing combinations; virtual sums are not guaranteed gains.
 Do not interpret yielding, traffic, warmup or cooldown as technique loss or
 all-day timing spread as driver consistency. Pace screening cannot prove intent
 or clean running. Inspect lap-selection/interruption flags and prefer external

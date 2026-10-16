@@ -8,6 +8,13 @@ Follow `skill/SKILL.md`. Use deterministic telemetry tools for measurement; use 
 
 ## Required workflow
 
+Make the all-lap physical mini-sector matrix and source-labeled virtual-best
+composite the primary opportunity analysis. Inspect fast sections even when the
+whole lap is slower, subject to local context/quality exclusions. Show per-session
+and combined sums separately, check source-switch boundary states, then diagnose
+the best actual whole lap against each selected section's winning donor. A
+pairwise plot illustrates that local question; it is not the overall search method.
+
 Do not equate timed laps with push laps. Use the candidate-push pool, inspect
 unresolved interruption flags, and prefer external driver/video annotations.
 All-timed timing spread is not evidence of driver inconsistency. Pace screening

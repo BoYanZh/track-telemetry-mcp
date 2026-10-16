@@ -24,6 +24,14 @@ lap_context takes precedence over pace screening. Near-PB pace still does not
 establish a clean lap. Compare equivalent populations; the narrower spread after
 pace filtering is a selection effect, not evidence of improved consistency.
 
+For time opportunities, start with the all-lap mini-sector matrix and virtual
+best sources. Whole-lap pace screening must not discard fast local sections on
+otherwise slower laps. Explicit external context and local quality flags still
+apply. Diagnose the best whole lap against the fastest donor for each selected
+section using the common physical GPS grid. Check adjoining entry/exit states;
+never treat the sum as an attainable or guaranteed target. Show per-session and
+combined results separately so changed conditions remain visible.
+
 For complete session analysis and coaching, default to `analyze_session_debrief`
 with every supplied file and all stints. Or run `track-telemetry-coach analyze
 FILES --output DIR` in a shell environment. Follow

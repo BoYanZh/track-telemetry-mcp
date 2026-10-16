@@ -15,6 +15,10 @@ Summarize:
 
 ## Workflow
 
+Start opportunity analysis with the all-lap mini-sector matrix and virtual-best
+sources, not a single lap pair. Use same-day results first and flag incompatible
+source-switch states. Arithmetic composite gaps are not guaranteed improvements.
+
 Separate all-timed timing spread from candidate-push execution. Inspect lap
 selection and interruption flags before ranking losses. Never infer traffic
 or a technique fault from a slow lap alone; use driver/video context when available.
