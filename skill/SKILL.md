@@ -21,6 +21,19 @@ Keep the all-lap matrix, virtual sums and boundary-state audit collapsed in the
 calculation appendix. They support the diagnosis; they are not the driver-facing
 answer. Separate observed time differences from achievable or guaranteed gains.
 
+For each priority location, finish the causal chain: locate the delta, check
+adjoining-window timing, inspect recorded brake onset/pressure/release, steering
+build-up/unwind, and accelerator-pedal timing, then verify against speed, G and
+real GPS passages. A high pedal value with low speed can be inherited overslow;
+more or earlier power is not automatically the remedy. Different minimum-speed
+locations must not be treated as one shared apex when comparing timing. Use
+`corner_passages.input_analysis` and `timing_check`; withdraw a single-sector
+opportunity if the selected donor loses its advantage in the adjoining window,
+unless stronger evidence resolves why. Explain unavailable controls explicitly.
+Write `braking_analysis`, `steering_analysis` and `power_analysis` in each applicable
+report section, in coaching-priority order. Display large zoomable route details
+and synchronized controls directly; hiding curves in details is not analysis.
+
 Timed does not mean pushing. Use candidate-push selection and inspect concentrated
 loss flags before diagnosing technique. Never label a slow lap as traffic from
 telemetry alone, or call all-timed-lap spread driver inconsistency. Driver/video

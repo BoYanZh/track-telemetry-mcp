@@ -105,39 +105,6 @@ def _map(evidence, zones, zh, selected=None):
     return "".join(pieces)
 
 
-def _speed_chart(observation, zh):
-    profile = observation["physical_section_profile"]
-    values = [p[key] for p in profile for key in ("lap_a_speed_kmh", "lap_b_speed_kmh")
-              if p[key] is not None]
-    if len(profile) < 2 or not values:
-        return ""
-    lo, hi = min(values) - 5, max(values) + 5
-    distance = profile[-1]["reference_distance_m"] - profile[0]["reference_distance_m"]
-    if distance <= 0:
-        return ""
-    svg = ['<svg viewBox="0 0 760 270" role="img" aria-label="' + ("高亮区段速度对比" if zh else "Section speed comparison") + '">']
-    for value in np.linspace(lo, hi, 4):
-        y = 220 - (value - lo) / (hi - lo) * 180
-        svg.append(f'<path d="M60,{y:.1f}H725" stroke="#e0e5e8"/><text x="50" y="{y + 5:.1f}" text-anchor="end" font-size="15">{value:.0f}</text>')
-    for key, color in (("lap_a_speed_kmh", "#ba4a20"), ("lap_b_speed_kmh", "#126d82")):
-        parts = []
-        connected = False
-        for point in profile:
-            value = point[key]
-            if value is None:
-                connected = False
-                continue
-            x = 60 + (point["reference_distance_m"] - profile[0]["reference_distance_m"]) / distance * 665
-            y = 220 - (value - lo) / (hi - lo) * 180
-            parts.append(("L" if connected else "M") + f"{x:.1f},{y:.1f}")
-            connected = True
-        svg.append(f'<path d="{" ".join(parts)}" stroke="{color}" stroke-width="3.5" fill="none"/>')
-    svg += ['<text x="60" y="22" font-size="16">' + ("速度 · 公里/小时" if zh else "Speed · km/h") + '</text>',
-            '<text x="60" y="253" font-size="16">' + ("高亮段起点" if zh else "Section start") + '</text>',
-            '<text x="725" y="253" font-size="16" text-anchor="end">' + ("高亮段终点" if zh else "Section end") + '</text></svg>']
-    return "".join(svg)
-
-
 def render_report(evidence, coaching):
     """Build localized, illustrated reports without dumping machine evidence into prose."""
     zh = coaching.get("language", "zh" if re.search(r"[\u4e00-\u9fff]", coaching["summary"]) else "en").startswith("zh")
@@ -183,7 +150,8 @@ def render_report(evidence, coaching):
                       "北朝上；箭头按记录顺序表示行驶方向。彩色段是本次分析位置，灰线是采样轨迹，不是赛道边界。A/B/C 是本报告的位置标记，不是官方弯号。",
                       "North up; arrows follow sample order. Highlights locate the findings. GPS lines are not track boundaries; letters are not official corner names.") + '</p></section>')
     descriptions = {item["observation_id"]: item for item in coaching.get("sections", [])}
-    for zone in zones:
+    section_order = {key: index for index, key in enumerate(descriptions)}
+    for zone in sorted(zones, key=lambda z: section_order.get(z["observation"]["id"], len(descriptions))):
         o = zone["observation"]
         difference = o.get("measured_difference_s", o.get("median_loss_s"))
         composite = o.get("loss_metric") == "best_whole_lap_minus_sector_best"
@@ -201,14 +169,14 @@ def render_report(evidence, coaching):
                       + paragraphs(description.get("what_happened", tr(
                           f"本段有 {o['compared_laps']} 个可用样本，其中 {o['repeat_count']} 个位于本段最快后 0.1 秒以内。曲线比较整圈最快圈与本段最快来源，不是虚拟圈可实现的证明。",
                           f"{o['compared_laps']} eligible samples; {o['repeat_count']} within 0.1 s of sector best. This comparison does not establish feasibility of the virtual lap.")))
-                      + '</div></div><figure>' + _speed_chart(o, zh)
+                      + '</div></div><figure>'
                       + '<figcaption><span class="driver">' + tr("整圈最快：" if composite else "对照：", "Best whole lap: " if composite else "Compared: ") + _escape(driver_label)
                       + '</span>　<span class="reference">' + tr("本段最快：" if composite else "参考：", "Sector best: " if composite else "Reference: ") + _escape(ref_label)
                       + '</span> · ' + tr("两条曲线对应图上同一物理区段", "Both traces use matched physical locations") + '</figcaption></figure>')
         from .corner_report import render_corner
 
         bodies.append(render_corner(o, lambda i, lap: _session_name(sessions[i], zh)
-                                    + tr(f"第{lap}圈", f" L{lap}"), zh))
+                                    + tr(f"第{lap}圈", f" L{lap}"), zh, description=description))
         for key, label in (("interpretation", tr("怎样理解", "Interpretation")), ("cue", tr("先做什么", "First action")),
                            ("watch_out", tr("不要据此推断", "Limits"))):
             if description.get(key):
@@ -226,6 +194,8 @@ def render_report(evidence, coaching):
         md += ["", f"## {zone['letter']} · {heading}", "", description.get("what_happened", ""),
                tr(f"实测区段差约 {difference:.2f} 秒。", f"Measured section difference: {difference:.2f} s."),
                description.get("interpretation", ""), description.get("cue", ""), description.get("watch_out", "")]
+        md.extend(description[key] for key in ("braking_analysis", "steering_analysis", "power_analysis")
+                  if description.get(key))
         if not description.get("interpretation"):
             md.extend(h["explanation"] for h in linked)
     bodies.append('<section><h2>' + tr("下一节只做这些练习", "Next-session experiments") + '</h2>')
@@ -278,6 +248,9 @@ def render_report(evidence, coaching):
     bodies.append('<p><a href="evidence.json">' + tr("完整测量数据（JSON）", "Full measurement evidence (JSON)") + '</a></p></details>')
     css = """body{margin:0;background:#f3f5f6;color:#26343c;font:17px/1.8 'Microsoft YaHei','PingFang SC',sans-serif}main{max-width:1050px;margin:auto;padding:46px 28px}header{padding:12px 0 24px;border-bottom:4px solid #243c49}h1{font-size:clamp(28px,5vw,44px);line-height:1.3;margin:12px 0 24px}h2{font-size:27px;line-height:1.5;margin:0 0 20px}h3{font-size:19px;margin:24px 0 8px}p{max-width:48em;margin:12px 0}.brand,.note,figcaption{color:#5a6a73;font-size:14px}.brand{letter-spacing:.12em}section{padding:36px 0;border-bottom:1px solid #ced7dc}svg{width:100%;height:auto;display:block;background:white;border-radius:5px}svg text{font-family:'Microsoft YaHei',sans-serif}table{border-collapse:collapse;width:100%;background:white;font-variant-numeric:tabular-nums}td,th{text-align:left;border-bottom:1px solid #dce3e7;padding:13px}th{font-size:14px;color:#52636e}a{color:#126d82}.map-key{display:flex;gap:20px;flex-wrap:wrap;margin:18px 0}.map-key a{color:var(--zone);font-weight:bold;text-decoration:none}.letter{display:inline-grid;place-items:center;background:var(--zone);color:white;width:40px;height:40px;margin-right:12px;font-size:23px;border-radius:50%}.zone-layout{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:center}.finding{font-size:24px;line-height:1.5;color:var(--zone);font-weight:700}figure{margin:24px 0}figcaption{margin-top:8px}.driver{color:#ba4a20}.reference{color:#126d82}.practice{padding:8px 24px 22px;margin:24px 0;background:white;border-left:4px solid #126d82}dt{font-weight:bold;color:#344d5a;margin-top:16px}dd{margin:4px 0}details{margin:30px 0;font-size:14px}summary{cursor:pointer;font-size:17px}header p{max-width:45em}@media(max-width:650px){main{padding:24px 16px}.zone-layout{grid-template-columns:1fr}table{font-size:13px}td,th{padding:8px}h2{font-size:23px}.practice{padding:8px 15px 20px}}@media print{body{background:white}main{padding:0}.zone,.practice{break-inside:avoid}details{display:none}}"""
     css += '.sector-matrix{overflow-x:auto;margin-top:25px}.sector-matrix table{font-size:12px;white-space:nowrap}.sector-matrix td,.sector-matrix th{padding:6px;min-width:37px}.sector-matrix th:first-child{position:sticky;left:0;background:#f3f5f6;min-width:110px}.notice{border-left:4px solid #ba4a20;padding:12px 18px;background:#fff3e7}'
-    document = f'<!doctype html><html lang="{"zh-CN" if zh else "en"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{_escape(title)}</title><style>{css}</style></head><body><main>' + "".join(bodies) + '</main></body></html>'
+    css += '.route-canvas{height:760px;max-height:85vh;min-height:420px;touch-action:none;cursor:grab;overflow:hidden}.route-canvas:active{cursor:grabbing}.route-toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px}.route-toolbar button{font:inherit;padding:8px 16px;background:white;border:1px solid #9baeb7;border-radius:5px;cursor:pointer}.input-traces figure{margin:16px 0}.input-analysis{border-left:3px solid #126d82;padding:1px 20px;margin:18px 0;background:#fff}.input-traces{clear:both}'
+    from .corner_report import ROUTE_SCRIPT
+
+    document = f'<!doctype html><html lang="{"zh-CN" if zh else "en"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{_escape(title)}</title><style>{css}</style></head><body><main>' + "".join(bodies) + '</main>' + ROUTE_SCRIPT + '</body></html>'
     md += ["", tr("路线、横纵向 G 和控制输入图见同目录 report.html；完整测量见 evidence.json。", "See report.html for routes, lateral/longitudinal G and control figures; full measurements are in evidence.json.")]
     return "\n".join(md), document

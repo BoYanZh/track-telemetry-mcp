@@ -184,7 +184,8 @@ def test_chinese_report_has_spatial_figures_and_no_raw_field_dump(tmp_path):
     assert "median_loss_s" not in document
     assert "Session and stint timing" not in document
     assert "distance 1234 m" not in document
-    assert "<script>" not in document and "&lt;script&gt;" in document
+    assert "<script>not executable</script>" not in document and "&lt;script&gt;" in document
+    assert document.count("<script") == 1 and '<script id="route-controls">' in document
     assert "固定一个参照" in markdown
     assert "未记录机油压力" in document and "未记录机油压力" in markdown
     assert '<details class="calculations">' in document

@@ -47,6 +47,11 @@ use all eligible local mini-sectors for virtual-best analysis, including good
 sections on otherwise slower laps. Inspect context and interruption flags.
 Pace screening cannot confirm intent or a clean lap. Prefer driver/video lap_context
 annotations when available, and never label an excluded slow lap as traffic by inference.
+Before prescribing, inspect corner_passages.timing_check and near_best_passages: a
+sector donor can lose its advantage across adjoining sectors. Explain recorded
+braking, steering and pedal evidence, including contradictions, using input_analysis.
+Do not compare different minima as a shared apex or prescribe earlier power when
+the slower pass already applies more pedal. Order sections by coaching priority.
 Use finalize_session_debrief with the evidence path and coaching object to
 validate evidence references and write matching completed Markdown/HTML reports.
 Coaching fields: summary, hypotheses and experiments. Each hypothesis needs
@@ -54,7 +59,7 @@ observation_ids, explanation, confidence and confounders. Each experiment needs
 observation_ids, location, change, baseline, success_measure, abort_condition and re_test.
 Match the user's language throughout. Optional language (zh-CN/en), title and
 sections entries (observation_id, title, what_happened, interpretation, cue,
-watch_out) produce a localized illustrated report. Explain locations using the
+watch_out, braking_analysis, steering_analysis, power_analysis) produce a localized illustrated report. Explain locations using the
 report's highlighted GPS map, not distance-only descriptions or unverified
 official corner names. Keep raw fields and provenance in JSON, not human prose.
 """
@@ -271,7 +276,8 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
             profile = observation["physical_section_profile"]
             donor = observation["section_reference"]
             observation["corner_passages"] = _attempt(
-                measure_passages, sessions, observation, comparisons, self_comparison, ri)
+                measure_passages, sessions, observation, comparisons, self_comparison, ri,
+                mini_sector_analysis=evidence["mini_sector_analysis"])
             observation["confounders"] = CONFOUNDERS
             observation["section_diagnostics"] = {
                 "driver": _attempt(_physical_section, sessions[observation["example_session"]],
@@ -388,7 +394,8 @@ def finalize_debrief(evidence_path: Path, coaching: dict):
         raise ValueError("Report sections must reference existing observation IDs")
     for section in sections:
         if any(key in section and not isinstance(section[key], str) for key in
-               ("title", "what_happened", "interpretation", "cue", "watch_out")):
+               ("title", "what_happened", "interpretation", "cue", "watch_out",
+                "braking_analysis", "steering_analysis", "power_analysis")):
             raise ValueError("Report section text must be strings")
     evidence.update(status="coaching_complete", hypotheses=hypotheses,
                     practice_plan=experiments, coaching_summary=coaching["summary"])

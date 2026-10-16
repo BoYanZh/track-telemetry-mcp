@@ -135,6 +135,23 @@ Once the important section and loss type are known, inspect the minimum evidence
 
 A useful order is:
 
+Before classifying a sector deficit as an opportunity, compare the donor with the
+best actual lap over the preceding, target and following sectors. A quicker target
+can merely move braking or speed loss across a boundary. `corner_passages.timing_check`
+reports both signed differences; a negative context difference means the best
+whole lap was quicker over that larger window. This is a screening window, not
+proof of a complete corner or a physically achievable stitched lap.
+
+For a completed debrief, explain every recorded control category in the priority
+locations. Use `input_analysis` for threshold-defined brake events, recorded pedal
+and steering values, and source/native-rate metadata. Distinguish context extrema
+from target-sector extrema. Compare events at matched physical positions; do not
+compare delays from different minima as if they shared an apex. A pressure peak
+alone is not braking quality, steering angle alone is not understeer, and earlier
+full pedal may be compensation for previous speed loss. Each diagnosis must state
+which evidence supports it, what contradicts it, and what observation would change
+it. Put unavailable data in the conclusion rather than inventing it.
+
 ### Braking
 
 ```text

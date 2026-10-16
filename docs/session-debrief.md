@@ -119,3 +119,16 @@ and run pytest tests/test_debrief.py. Recordings are never added to the reposito
 ### Corner-focused presentation
 
 Lead with the fastest actual lap versus the mini-sector theoretical best, then the three priority locations. Keep recording statistics and the full mini-sector matrix in the evidence or closed details. For each priority section, `corner_passages` retains every aligned real passage, with the adjacent sections as context. Inspect the highlighted baseline/donor GPS routes, measured lateral and longitudinal G, and separate pedal, throttle body, pressure and steering traces before writing the diagnosis. Context-window statistics must not be presented as target-sector statistics; `core_g_usage` covers the target alone. G availability requires verified source and native-rate gates. GPS scatter includes drift and does not prove a line advantage. The theoretical sum has no continuous GPS or G trace.
+
+The report now opens route details at the target section and provides local zoom,
+pan and adjoining-window controls. Control/response traces remain visible on the
+same physical-position axis; the shaded band is the timed target, not an official
+corner boundary. `sections` order determines presentation priority while map
+letters remain stable. Add `braking_analysis`, `steering_analysis`, and
+`power_analysis` prose after inspecting actual measurements. `input_analysis`
+reuses `analyze_braking` events and retains raw control summaries; high-pedal
+crossings are recorded samples at >=90%, not sustained application or proof of
+intent. Review `timing_check` before recommending a donor: the sector advantage
+may disappear when adjacent sections are counted. Never compare two different
+window minima as a common apex. The report's embedded zoom controls work offline;
+all coaching text remains HTML-escaped.
