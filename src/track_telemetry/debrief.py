@@ -263,12 +263,15 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
                            ("virtual_best_s", "best_whole_lap_s", "arithmetic_gap_s")},
                 "confidence": "low", "confounders": CONFOUNDERS})
     if evidence.get("mini_sector_analysis"):
+        from .corner_passes import measure_passages
         from .mini_sectors import opportunity_profiles
 
         for observation in opportunity_profiles(evidence["mini_sector_analysis"], comparisons,
                                                 self_comparison, ri):
             profile = observation["physical_section_profile"]
             donor = observation["section_reference"]
+            observation["corner_passages"] = _attempt(
+                measure_passages, sessions, observation, comparisons, self_comparison, ri)
             observation["confounders"] = CONFOUNDERS
             observation["section_diagnostics"] = {
                 "driver": _attempt(_physical_section, sessions[observation["example_session"]],

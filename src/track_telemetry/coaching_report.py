@@ -152,21 +152,15 @@ def render_report(evidence, coaching):
         return "".join(f"<p>{_escape(p)}</p>" for p in text.split("\n\n") if p.strip())
     bodies.append('<header><p class="brand">' + tr("驾驶复盘 · 下一节练习", "Debrief · next-session practice")
                   + f'</p><h1>{_escape(title)}</h1>{paragraphs(coaching["summary"])}</header>')
-    bodies.append('<section><h2>' + tr("先看这两组圈速", "Timing at a glance") + '</h2><table><thead><tr>'
-                  + "".join(f"<th>{v}</th>" for v in [tr("记录", "Recording"), tr("计时圈", "Timed laps"),
-                      tr("候选快圈", "Pace candidates"), tr("最快圈", "Best"), tr("候选圈中位", "Candidate median")])
-                  + '</tr></thead><tbody>')
-    md += ["## " + tr("圈速概览", "Timing overview"), "", "| " + " | ".join(
-        [tr("记录", "Recording"), tr("计时圈", "Timed laps"), tr("候选快圈", "Candidates"), tr("最快圈", "Best")]) + " |", "| --- | --- | --- | --- |"]
-    for session in sessions.values():
-        stats, pool = session["consistency"], session["candidate_push_consistency"]
-        name = _session_name(session, zh)
-        values = [name, stats["count"], pool["count"], _time(stats.get("best_s")), _time(pool.get("median_s"))]
-        bodies.append('<tr>' + "".join(f"<td>{_escape(v)}</td>" for v in values) + '</tr>')
-        md.append(f"| {name} | {stats['count']} | {pool['count']} | {_time(stats.get('best_s'))} |")
-    bodies.append('</tbody></table><p class="note">' + tr(
-        "候选快圈只表示配速接近，并不证明当时全力驾驶或没有交通干扰。全部圈时的波动不等于驾驶不稳定。",
-        "Pace candidates do not confirm push intent or clear traffic. All-lap spread is not driver inconsistency.") + '</p></section>')
+    composite = evidence.get("mini_sector_analysis", {}).get("combined", {})
+    if composite.get("virtual_best_s") is not None:
+        source = composite["best_whole_lap_source"]
+        name = _session_name(sessions[source["session"]], zh)
+        text = tr(
+            f"实际最快 {name}第{source['lap']}圈 {_time(composite['best_whole_lap_s'])}；分段理论最佳 {_time(composite['virtual_best_s'])}；算术差 {composite['arithmetic_gap_s']:.3f} 秒。下面直接定位最值得检查的三个弯区。理论最佳来自不同圈，不能视为下一节必然能跑出的圈速。",
+            f"Best actual lap {_time(composite['best_whole_lap_s'])}; mini-sector theoretical best {_time(composite['virtual_best_s'])}; arithmetic gap {composite['arithmetic_gap_s']:.3f} s. The composite is not a guaranteed achievable lap.")
+        bodies.append('<section><h2>' + tr("最快圈与分段理论最佳", "Best lap versus mini-sector theoretical best") + '</h2>' + paragraphs(text) + '</section>')
+        md += ["", text, ""]
     calculation_details = ""
     mini_md = []
     if evidence.get("mini_sector_analysis"):
@@ -211,6 +205,10 @@ def render_report(evidence, coaching):
                       + '<figcaption><span class="driver">' + tr("整圈最快：" if composite else "对照：", "Best whole lap: " if composite else "Compared: ") + _escape(driver_label)
                       + '</span>　<span class="reference">' + tr("本段最快：" if composite else "参考：", "Sector best: " if composite else "Reference: ") + _escape(ref_label)
                       + '</span> · ' + tr("两条曲线对应图上同一物理区段", "Both traces use matched physical locations") + '</figcaption></figure>')
+        from .corner_report import render_corner
+
+        bodies.append(render_corner(o, lambda i, lap: _session_name(sessions[i], zh)
+                                    + tr(f"第{lap}圈", f" L{lap}"), zh))
         for key, label in (("interpretation", tr("怎样理解", "Interpretation")), ("cue", tr("先做什么", "First action")),
                            ("watch_out", tr("不要据此推断", "Limits"))):
             if description.get(key):
@@ -281,5 +279,5 @@ def render_report(evidence, coaching):
     css = """body{margin:0;background:#f3f5f6;color:#26343c;font:17px/1.8 'Microsoft YaHei','PingFang SC',sans-serif}main{max-width:1050px;margin:auto;padding:46px 28px}header{padding:12px 0 24px;border-bottom:4px solid #243c49}h1{font-size:clamp(28px,5vw,44px);line-height:1.3;margin:12px 0 24px}h2{font-size:27px;line-height:1.5;margin:0 0 20px}h3{font-size:19px;margin:24px 0 8px}p{max-width:48em;margin:12px 0}.brand,.note,figcaption{color:#5a6a73;font-size:14px}.brand{letter-spacing:.12em}section{padding:36px 0;border-bottom:1px solid #ced7dc}svg{width:100%;height:auto;display:block;background:white;border-radius:5px}svg text{font-family:'Microsoft YaHei',sans-serif}table{border-collapse:collapse;width:100%;background:white;font-variant-numeric:tabular-nums}td,th{text-align:left;border-bottom:1px solid #dce3e7;padding:13px}th{font-size:14px;color:#52636e}a{color:#126d82}.map-key{display:flex;gap:20px;flex-wrap:wrap;margin:18px 0}.map-key a{color:var(--zone);font-weight:bold;text-decoration:none}.letter{display:inline-grid;place-items:center;background:var(--zone);color:white;width:40px;height:40px;margin-right:12px;font-size:23px;border-radius:50%}.zone-layout{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:center}.finding{font-size:24px;line-height:1.5;color:var(--zone);font-weight:700}figure{margin:24px 0}figcaption{margin-top:8px}.driver{color:#ba4a20}.reference{color:#126d82}.practice{padding:8px 24px 22px;margin:24px 0;background:white;border-left:4px solid #126d82}dt{font-weight:bold;color:#344d5a;margin-top:16px}dd{margin:4px 0}details{margin:30px 0;font-size:14px}summary{cursor:pointer;font-size:17px}header p{max-width:45em}@media(max-width:650px){main{padding:24px 16px}.zone-layout{grid-template-columns:1fr}table{font-size:13px}td,th{padding:8px}h2{font-size:23px}.practice{padding:8px 15px 20px}}@media print{body{background:white}main{padding:0}.zone,.practice{break-inside:avoid}details{display:none}}"""
     css += '.sector-matrix{overflow-x:auto;margin-top:25px}.sector-matrix table{font-size:12px;white-space:nowrap}.sector-matrix td,.sector-matrix th{padding:6px;min-width:37px}.sector-matrix th:first-child{position:sticky;left:0;background:#f3f5f6;min-width:110px}.notice{border-left:4px solid #ba4a20;padding:12px 18px;background:#fff3e7}'
     document = f'<!doctype html><html lang="{"zh-CN" if zh else "en"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{_escape(title)}</title><style>{css}</style></head><body><main>' + "".join(bodies) + '</main></body></html>'
-    md += ["", tr("轨迹定位与区段速度图见同目录 report.html；完整测量见 evidence.json。", "See report.html for location and speed figures; full measurements are in evidence.json.")]
+    md += ["", tr("路线、横纵向 G 和控制输入图见同目录 report.html；完整测量见 evidence.json。", "See report.html for routes, lateral/longitudinal G and control figures; full measurements are in evidence.json.")]
     return "\n".join(md), document

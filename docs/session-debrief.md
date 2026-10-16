@@ -115,3 +115,7 @@ as one file without network access or neighboring image files.
 
 For local real-data validation, set TRACK_TELEMETRY_REAL_RCZ to a private RCZ path
 and run pytest tests/test_debrief.py. Recordings are never added to the repository.
+
+### Corner-focused presentation
+
+Lead with the fastest actual lap versus the mini-sector theoretical best, then the three priority locations. Keep recording statistics and the full mini-sector matrix in the evidence or closed details. For each priority section, `corner_passages` retains every aligned real passage, with the adjacent sections as context. Inspect the highlighted baseline/donor GPS routes, measured lateral and longitudinal G, and separate pedal, throttle body, pressure and steering traces before writing the diagnosis. Context-window statistics must not be presented as target-sector statistics; `core_g_usage` covers the target alone. G availability requires verified source and native-rate gates. GPS scatter includes drift and does not prove a line advantage. The theoretical sum has no continuous GPS or G trace.

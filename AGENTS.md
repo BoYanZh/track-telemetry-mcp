@@ -35,6 +35,7 @@ composite as the primary opportunity analysis. Good local sections can come from
 otherwise slow laps. The spatial reference is a coordinate system, not a claim
 that its driver performance is fastest everywhere. Inspect boundary-state
 discontinuities before proposing combinations; virtual sums are not guaranteed gains.
+For priority sections, inspect `corner_passages`: all real GPS passages, measured lateral/longitudinal G, and distinct pedal/throttle/brake/steering traces over the adjoining physical sections. Compare the fastest actual lap with the sector donors; never invent a continuous theoretical trajectory. Explain how these measurements support or weaken each diagnosis, rather than delivering speed plots alone.
 Do not interpret yielding, traffic, warmup or cooldown as technique loss or
 all-day timing spread as driver consistency. Pace screening cannot prove intent
 or clean running. Inspect lap-selection/interruption flags and prefer external

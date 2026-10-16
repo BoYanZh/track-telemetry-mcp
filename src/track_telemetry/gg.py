@@ -9,9 +9,10 @@ from .models import TelemetrySession
 from .quality import matched_window, measured_source
 
 
-def analyze_gg_usage(session: TelemetrySession, lap_number: int) -> dict:
+def analyze_gg_usage(session: TelemetrySession, lap_number: int, *, start_s=None, end_s=None) -> dict:
     """Measure recorded G occupancy, not available tire grip or a friction coefficient."""
-    _, values, weights, quality = matched_window(session, lap_number, (LAT_G, LONG_G))
+    _, values, weights, quality = matched_window(
+        session, lap_number, (LAT_G, LONG_G), start_s=start_s, end_s=end_s)
     if not all(measured_source(s) for s in quality["sources"].values()):
         raise ValueError("G usage requires verified measured acceleration sources")
     if any(rate is not None and rate < 5 for rate in quality["native_sample_rate_hz"].values()):
