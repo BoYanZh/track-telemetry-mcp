@@ -42,7 +42,7 @@ it as recoverable time. Explain brake onset/pressure/release, steering transitio
 and accelerator-pedal timing with `input_analysis` and vehicle response, including
 contradictory evidence. Keep the route large and zoomable and the control traces
 visible. In report `sections`, write `braking_analysis`, `steering_analysis` and
-`power_analysis` when recorded, or explain what is unavailable. Order sections by
+`power_analysis` and `g_analysis` when recorded, or explain what is unavailable. Order sections by
 coaching priority. A continuous theoretical trajectory must never be invented.
 Do not interpret yielding, traffic, warmup or cooldown as technique loss or
 all-day timing spread as driver consistency. Pace screening cannot prove intent
@@ -110,3 +110,5 @@ For the standard review methodology — validate data, choose a reference, locat
 For source semantics, incident rules, output format, and risk-aware coaching guidance, follow [`skill/SKILL.md`](skill/SKILL.md).
 
 Task-specific prompts are in [`prompts/`](prompts/).
+
+Default corner presentation: exactly one power-control trace (prefer accelerator pedal), one brake trace (prefer pressure), steering, and planar combined G = hypot(lat_g, long_g). Use one short finding per item; omit duplicate sensors and repeated caveats. Keep detailed channels and provenance in JSON.

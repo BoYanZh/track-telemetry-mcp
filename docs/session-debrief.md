@@ -125,10 +125,12 @@ pan and adjoining-window controls. Control/response traces remain visible on the
 same physical-position axis; the shaded band is the timed target, not an official
 corner boundary. `sections` order determines presentation priority while map
 letters remain stable. Add `braking_analysis`, `steering_analysis`, and
-`power_analysis` prose after inspecting actual measurements. `input_analysis`
+`power_analysis` and `g_analysis` prose after inspecting actual measurements. `input_analysis`
 reuses `analyze_braking` events and retains raw control summaries; high-pedal
 crossings are recorded samples at >=90%, not sustained application or proof of
 intent. Review `timing_check` before recommending a donor: the sector advantage
 may disappear when adjacent sections are counted. Never compare two different
 window minima as a common apex. The report's embedded zoom controls work offline;
 all coaching text remains HTML-escaped.
+
+Default corner presentation: exactly one power-control trace (prefer accelerator pedal), one brake trace (prefer pressure), steering, and planar combined G = hypot(lat_g, long_g). Use one short finding per item; omit duplicate sensors and repeated caveats. Keep detailed channels and provenance in JSON.

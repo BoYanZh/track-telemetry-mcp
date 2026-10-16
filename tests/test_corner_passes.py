@@ -34,11 +34,18 @@ def test_all_passages_and_unverified_g_are_preserved(tmp_path):
     assert "最快圈与分段理论最佳" in report
     assert "每次过弯的真实路线" in report
     assert "缺少来源和质量合格的实测 G" in report
-    assert "加速踏板" in report and "节气门体" in report
+    assert "加速踏板" in report and "总 G · 平面合成" in report
+    assert "节气门体 · %" not in report and "制动踏板 · %" not in report
     assert 'class="route-canvas"' in report and 'data-route-action="in"' in report
     assert 'data-route-action="context"' in report
     assert "查看踏板、节气门、制动与转向" not in report
-    assert "动作与车辆响应" in report
+    assert "横向 G</h3>" not in report and "纵向 G</h3>" not in report
+    from track_telemetry.corner_report import render_corner
+
+    corner = render_corner(observations[0], lambda i, lap: f"{i}:{lap}", True)
+    assert corner.count('<figure><h3>') == 4
+    assert "速度 · 公里/小时" not in corner
+    assert "刹车 · 压力 bar" in corner
     for o in observations:
         context = o["corner_passages"]
         timing = context["timing_check"]

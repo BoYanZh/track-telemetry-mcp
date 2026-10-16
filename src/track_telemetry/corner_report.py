@@ -93,27 +93,23 @@ def render_corner(observation, label, zh, *, description=None):
         pieces.insert(0, '<p class="notice">' + message + '</p>')
     lo = observation["corner_passages"]["context_start_progress"]
     hi = observation["corner_passages"]["context_end_progress"]
-    charts = [("speed_kmh", "速度 · 公里/小时" if zh else "Speed · km/h")]
-
-    for name, title in (("brake_pressure_kpa", "制动压力 · kPa" if zh else "Brake pressure · kPa"),
-                        ("brake_pos_pct", "制动踏板 · %" if zh else "Brake position · %"),
-                        ("steering_deg", "方向盘角度 · 度" if zh else "Steering · degrees"),
-                        ("accelerator_pct", "加速踏板 · %" if zh else "Accelerator pedal · %"),
-                        ("throttle_pct", "节气门体 · %" if zh else "Throttle body · %")):
-        if any(name in p.get("controls", {}) for p in selected):
-            charts.append((name, title))
-    charts += [("lat_g", "横向 G" if zh else "Lateral G"), ("long_g", "纵向 G" if zh else "Longitudinal G")]
-    pieces.append('<h3>' + ("动作与车辆响应：同一位置，逐层对照" if zh else "Controls and response at matched locations") + '</h3><div class="input-traces">')
-    analysis = {"braking_analysis": ("刹车：起点、力度与松刹", "Braking: onset, pressure and release"),
-                "steering_analysis": ("转向：建立、转换与回正", "Steering: build-up, transition and unwind"),
-                "power_analysis": ("油门：踏板动作与动力衔接", "Power: pedal and response")}
+    def common(preferred, fallback):
+        return preferred if all(preferred in p.get("controls", {}) for p in selected) else (
+            fallback if all(fallback in p.get("controls", {}) for p in selected) else preferred)
+    power = common("accelerator_pct", "throttle_pct")
+    brake = common("brake_pressure_kpa", "brake_pos_pct")
+    charts = [(power, ("油门 · 加速踏板 %" if power == "accelerator_pct" else "油门 · 节气门体 %") if zh else power),
+              (brake, ("刹车 · 压力 bar" if brake == "brake_pressure_kpa" else "刹车 · 踏板 %") if zh else brake),
+              ("steering_deg", "转向 · 度" if zh else "Steering · degrees"),
+              ("combined_g", "总 G · 平面合成" if zh else "Combined G · planar")]
+    pieces.append('<div class="input-traces">')
+    analysis = {"braking_analysis": "", "steering_analysis": "", "power_analysis": "", "g_analysis": ""}
     written = set()
     def explain(key):
         if key in written or not description.get(key):
             return
         written.add(key)
-        title = analysis[key][0 if zh else 1]
-        pieces.append('<article class="input-analysis"><h3>' + title + '</h3><p>'
+        pieces.append('<article class="input-analysis"><p>'
                       + html.escape(description[key]) + '</p></article>')
     for name, title in charts:
         if name in ("brake_pressure_kpa", "brake_pos_pct"):
@@ -122,10 +118,13 @@ def render_corner(observation, label, zh, *, description=None):
             explain("steering_analysis")
         elif name in ("accelerator_pct", "throttle_pct"):
             explain("power_analysis")
+        elif name == "combined_g":
+            explain("g_analysis")
         def trace(p):
-            if name in ("lat_g", "long_g"):
-                return [(s["time_s"], s["progress"], s[name]) for s in p["g_samples"]]
-            return [(s["time_s"], s["progress"], s["value"]) for s in p.get("controls", {}).get(name, {}).get("samples", [])]
+            if name == "combined_g":
+                return [(s["time_s"], s["progress"], float(np.hypot(s["lat_g"], s["long_g"]))) for s in p["g_samples"]]
+            return [(s["time_s"], s["progress"], (s["value"] / 100 if name == "brake_pressure_kpa" and s["value"] is not None else s["value"]))
+                    for s in p.get("controls", {}).get(name, {}).get("samples", [])]
 
         samples = [v for p in selected for _, _, v in trace(p) if v is not None]
         pieces.append('<figure><h3>' + title + '</h3>')
@@ -134,15 +133,17 @@ def render_corner(observation, label, zh, *, description=None):
                 pieces.append('<p class="note">' + html.escape(label(p["session"], p["lap"])) +
                               ("：此通道缺失或未通过质量检查。" if zh else ": channel missing or quality check failed.") + '</p>')
         if not samples:
-            message = ("缺少来源和质量合格的实测 G，无法比较。" if name in ("lat_g", "long_g") else "缺少可比较的控制记录。") if zh else "Comparable verified samples unavailable."
+            message = ("缺少来源和质量合格的实测 G，无法比较。" if name == "combined_g" else "缺少可比较的控制记录。") if zh else "Comparable verified samples unavailable."
             pieces.append('<p>' + message + '</p></figure>')
             continue
         lower, upper = min(samples), max(samples)
         if name in ("accelerator_pct", "throttle_pct", "brake_pos_pct"):
             lower, upper = 0., max(100., upper)
-        elif name in ("lat_g", "long_g", "steering_deg"):
+        elif name == "steering_deg":
             upper = max(.2, max(abs(lower), abs(upper))) * 1.1
             lower = -upper
+        elif name == "combined_g":
+            lower, upper = 0., max(.2, upper * 1.1)
         else:
             padding = max(1., (upper - lower) * .08)
             lower, upper = max(0., lower - padding), upper + padding
@@ -166,10 +167,9 @@ def render_corner(observation, label, zh, *, description=None):
                 d.append(("L" if connected else "M") + f'{60+(progress-lo)/(hi-lo)*670:.1f},{ordinate(value):.1f}')
                 previous = time
             pieces.append(f'<path d="{" ".join(d)}" fill="none" stroke="{color}" stroke-width="2"/>')
-        pieces.append('<text x="60" y="215">' + ("前一区段 → 高亮区段 → 后一区段（物理位置对齐）" if zh else "Previous → target → following sector, physically aligned") + '</text></svg></figure>')
+        pieces.append('<text x="60" y="215">' + ("弯前 → 目标段 → 弯后" if zh else "Previous → target → following sector, physically aligned") + '</text></svg></figure>')
     for key in analysis:
         explain(key)
     pieces.append('</div>')
-    pieces.append('<p class="note">'  + ("所有曲线都包含前后相邻区段，浅色带才是目标计时段；本段差与前后合计差分别列出。路线默认只放大目标段，可切换前后弯。G 是记录到的加速度，不代表轮胎抓地极限；坡度、倾角和传感器安装都会影响读数。"
-                  if zh else "Traces include adjacent sectors; shading marks the target. Sector and context deficits are reported separately. The route opens at the target with a context option. Measured G is not available grip; grade, banking and mounting affect readings.") + '</p>')
+    pieces.append('<p class="note">' + ("浅色带为目标段；总 G = √(横向 G² + 纵向 G²)，不是抓地极限。" if zh else "Shading marks the target. Combined G = hypot(lateral G, longitudinal G), not available grip.") + '</p>')
     return "".join(pieces)

@@ -30,7 +30,7 @@ locations must not be treated as one shared apex when comparing timing. Use
 `corner_passages.input_analysis` and `timing_check`; withdraw a single-sector
 opportunity if the selected donor loses its advantage in the adjoining window,
 unless stronger evidence resolves why. Explain unavailable controls explicitly.
-Write `braking_analysis`, `steering_analysis` and `power_analysis` in each applicable
+Write `braking_analysis`, `steering_analysis`, `power_analysis` and `g_analysis` in each applicable
 report section, in coaching-priority order. Display large zoomable route details
 and synchronized controls directly; hiding curves in details is not analysis.
 
@@ -358,3 +358,5 @@ Then provide:
 - one or two concrete driving cues per important section
 
 Keep recommendations tied to measured evidence. Explicitly state uncertainty where channels, layout alignment, reference data, control-source fallback, or slip-angle anchoring are incomplete.
+
+Default corner presentation: exactly one power-control trace (prefer accelerator pedal), one brake trace (prefer pressure), steering, and planar combined G = hypot(lat_g, long_g). Use one short finding per item; omit duplicate sensors and repeated caveats. Keep detailed channels and provenance in JSON.

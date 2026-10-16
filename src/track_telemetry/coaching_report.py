@@ -194,7 +194,7 @@ def render_report(evidence, coaching):
         md += ["", f"## {zone['letter']} · {heading}", "", description.get("what_happened", ""),
                tr(f"实测区段差约 {difference:.2f} 秒。", f"Measured section difference: {difference:.2f} s."),
                description.get("interpretation", ""), description.get("cue", ""), description.get("watch_out", "")]
-        md.extend(description[key] for key in ("braking_analysis", "steering_analysis", "power_analysis")
+        md.extend(description[key] for key in ("braking_analysis", "steering_analysis", "power_analysis", "g_analysis")
                   if description.get(key))
         if not description.get("interpretation"):
             md.extend(h["explanation"] for h in linked)

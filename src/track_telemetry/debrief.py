@@ -57,9 +57,11 @@ validate evidence references and write matching completed Markdown/HTML reports.
 Coaching fields: summary, hypotheses and experiments. Each hypothesis needs
 observation_ids, explanation, confidence and confounders. Each experiment needs
 observation_ids, location, change, baseline, success_measure, abort_condition and re_test.
+Keep corner reports concise: one power, one brake, steering and planar combined G,
+with one short finding each; retain detailed channels in evidence.
 Match the user's language throughout. Optional language (zh-CN/en), title and
 sections entries (observation_id, title, what_happened, interpretation, cue,
-watch_out, braking_analysis, steering_analysis, power_analysis) produce a localized illustrated report. Explain locations using the
+watch_out, braking_analysis, steering_analysis, power_analysis, g_analysis) produce a localized illustrated report. Explain locations using the
 report's highlighted GPS map, not distance-only descriptions or unverified
 official corner names. Keep raw fields and provenance in JSON, not human prose.
 """
@@ -395,7 +397,7 @@ def finalize_debrief(evidence_path: Path, coaching: dict):
     for section in sections:
         if any(key in section and not isinstance(section[key], str) for key in
                ("title", "what_happened", "interpretation", "cue", "watch_out",
-                "braking_analysis", "steering_analysis", "power_analysis")):
+                "braking_analysis", "steering_analysis", "power_analysis", "g_analysis")):
             raise ValueError("Report section text must be strings")
     evidence.update(status="coaching_complete", hypotheses=hypotheses,
                     practice_plan=experiments, coaching_summary=coaching["summary"])
