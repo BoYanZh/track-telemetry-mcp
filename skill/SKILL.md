@@ -11,6 +11,12 @@ This is the detailed analysis policy for the MCP. Repository-aware agents should
 
 ## Agent contract
 
+Write the report in the user's language. Use a short summary and illustrated
+location sections, with the highlighted GPS map beside each diagnosis and speed
+comparison. Refer to map letters and recognizable mapped positions; do not rely
+on unexplained distance ranges or invent official corner numbers. Supply localized
+title/sections to the finalizer. Raw JSON keys belong in evidence, not human prose.
+
 Timed does not mean pushing. Use candidate-push selection and inspect concentrated
 loss flags before diagnosing technique. Never label a slow lap as traffic from
 telemetry alone, or call all-timed-lap spread driver inconsistency. Driver/video

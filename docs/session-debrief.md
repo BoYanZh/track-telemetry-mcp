@@ -81,5 +81,24 @@ and the one-to-three experiment limit before writing matching completed reports
 and updating JSON status. It validates structure, not the truth of an AI claim;
 the host remains responsible for evidence-based interpretation.
 
+## Human-readable presentation
+
+Final reports follow the hosting agent's language, inferred from its summary or
+set explicitly with language: zh-CN or en. The agent should supply a short title
+and a concise summary in the user's language. Optional sections entries link
+observation_id to title, what_happened, interpretation, cue and watch_out.
+
+The HTML report uses a north-up sampled GPS map with direction arrows and lettered
+highlights, followed by each location's speed comparison and coaching narrative.
+Letters are report locations, never invented official corner numbers. Positions
+come from the actual reference lap; without valid geometry, the report states the
+limitation. Use map-based location descriptions instead of unexplained distance
+ranges. Speed traces retain physical reference-position alignment.
+
+Primary text contains formatted lap times and plain-language practice fields.
+Selection details are collapsed; raw measurements and provenance remain in JSON.
+Main maps and speed figures are inline SVG, so the completed HTML can be opened
+as one file without network access or neighboring image files.
+
 For local real-data validation, set TRACK_TELEMETRY_REAL_RCZ to a private RCZ path
 and run pytest tests/test_debrief.py. Recordings are never added to the repository.

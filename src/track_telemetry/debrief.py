@@ -50,6 +50,11 @@ validate evidence references and write matching completed Markdown/HTML reports.
 Coaching fields: summary, hypotheses and experiments. Each hypothesis needs
 observation_ids, explanation, confidence and confounders. Each experiment needs
 observation_ids, location, change, baseline, success_measure, abort_condition and re_test.
+Match the user's language throughout. Optional language (zh-CN/en), title and
+sections entries (observation_id, title, what_happened, interpretation, cue,
+watch_out) produce a localized illustrated report. Explain locations using the
+report's highlighted GPS map, not distance-only descriptions or unverified
+official corner names. Keep raw fields and provenance in JSON, not human prose.
 """
 
 
@@ -221,6 +226,11 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
     evidence["reference"] = ({"session": reference[0], "lap": reference[1].number,
                              "selection": "Fastest externally confirmed push lap if supplied; otherwise fastest pace candidate with valid GPS. Clean status unverified."}
                              if reference else None)
+    if reference:
+        from .coaching_report import reference_geometry
+
+        evidence["reference_geometry"] = _attempt(reference_geometry, sessions[reference[0]],
+                                                    reference[1].number)
     comparisons = []
     if not same_layout_confirmed:
         evidence["unavailable_data"].append({"comparison": "Independent same-layout confirmation required"})
@@ -357,104 +367,6 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
             "evidence_json": str(output_dir / "evidence.json"), "evidence": evidence}
 
 
-def _report_html(markdown: str, evidence: dict) -> str:
-    """Render the report's limited Markdown structure, escaping all host-provided text."""
-    blocks = []
-    in_list = in_table = False
-    for line in markdown.splitlines():
-        if in_list and not line.startswith("- "):
-            blocks.append("</ul>")
-            in_list = False
-        if in_table and not line.startswith("|"):
-            blocks.append("</tbody></table></div>")
-            in_table = False
-        if line.startswith("|"):
-            cells = [cell.strip() for cell in line.strip("|").split("|")]
-            if all(set(cell) <= set("-: ") for cell in cells):
-                continue
-            if not in_table:
-                blocks.append('<div class="table-wrap"><table><tbody>')
-                in_table = True
-                tag = "th"
-            else:
-                tag = "td"
-            blocks.append("<tr>" + "".join(f"<{tag}>{html.escape(c)}</{tag}>" for c in cells) + "</tr>")
-        elif line.startswith("#"):
-            level = min(3, len(line) - len(line.lstrip("#")))
-            blocks.append(f"<h{level}>{html.escape(line.lstrip('# ').strip())}</h{level}>")
-        elif line.startswith("- "):
-            if not in_list:
-                blocks.append("<ul>")
-                in_list = True
-            blocks.append(f"<li>{html.escape(line[2:])}</li>")
-        elif line.strip():
-            blocks.append(f"<p>{html.escape(line)}</p>")
-    if in_list:
-        blocks.append("</ul>")
-    if in_table:
-        blocks.append("</tbody></table></div>")
-    blocks.append('<h2>Plots / 图表</h2>')
-    for bundle in evidence["plots"]:
-        if "output_html" in bundle:
-            name = html.escape(Path(bundle["output_html"]).name, quote=True)
-            blocks.append(f'<p><a href="{name}">{name}</a></p>')
-        for name, path in bundle.get("plot_files", {}).items():
-            src = html.escape(Path(path).name, quote=True)
-            caption = html.escape(name.replace("_", " "))
-            blocks.append(f'<figure><img loading="lazy" src="{src}" alt="{caption}">'
-                          f'<figcaption>{caption}</figcaption></figure>')
-    return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
-            '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            '<title>Track coaching debrief</title><style>'
-            'body{max-width:1100px;margin:40px auto;padding:0 24px;font:16px/1.7 system-ui,sans-serif;'
-            'color:#243343;background:#f6f8fa}h1,h2,h3{line-height:1.3;color:#132b41}'
-            'h1{border-bottom:4px solid #197f82;padding-bottom:20px}h2{margin-top:40px}'
-            'h3{border-left:4px solid #197f82;padding-left:14px}li{margin:10px 0}'
-            '.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;background:white}'
-            'td,th{padding:10px 14px;border-bottom:1px solid #dce3e9;text-align:left}'
-            'th{background:#e5eff2}figure{margin:24px 0;background:white;padding:12px}'
-            'img{width:100%;height:auto}figcaption{color:#536778}a{color:#126a77}'
-            '@media print{body{background:white;margin:0}figure{break-inside:avoid}}'
-            '</style></head><body><main>' + "".join(blocks) + '</main></body></html>')
-
-
-def _timing_tables(evidence: dict) -> list[str]:
-    def seconds(value):
-        return f"{value:.3f}" if value is not None else "unavailable"
-
-    lines = ["", "## Session and stint timing", "",
-             "| Recording | Stint | Timed laps | Best s | Median s | MAD s |",
-             "| --- | --- | --- | --- | --- | --- |"]
-    for session in evidence["sessions"]:
-        for label, stats in [("all timed", session["consistency"]),
-                             ("candidate push", session["candidate_push_consistency"])] + [
-                (str(s["stint"]), s["consistency"]) for s in session["stints"]]:
-            lines.append(f"| {session['index']} | {label} | {stats['count']} | "
-                         f"{seconds(stats.get('best_s'))} | {seconds(stats.get('median_s'))} | "
-                         f"{seconds(stats.get('mad_s'))} |")
-    lines += ["", "All-timed spread includes traffic, yielding, warmup and cooldown; it is not driver consistency.",
-              "Candidate push is a pace screen, not confirmed intent or a clean-lap claim.",
-              "Stint numbers are recorder identifiers. Zero timed laps does not mean zero recording.",
-              "", "| Recording | Source file |", "| --- | --- |"]
-    lines += [f"| {s['index']} | {s['summary']['source_name']} |" for s in evidence["sessions"]]
-    lines += ["", "## Lap selection audit", "",
-              "| Recording | Lap | Classification | Coaching eligible | Reason |",
-              "| --- | --- | --- | --- | --- |"]
-    for session in evidence["sessions"]:
-        for lap in session["lap_selection"]:
-            lines.append(f"| {session['index']} | {lap['lap']} | {lap['classification']} | "
-                         f"{lap['coaching_eligible']} | {lap['reason']} |")
-    flagged = [(c, flag) for c in evidence["comparisons"] if c["coaching_eligible"]
-               for flag in c["possible_interruption_sectors"]]
-    if flagged:
-        lines += ["", "## Unresolved candidate-lap sections", "",
-                  "These lap/sector samples are withheld from technique ranking; causes remain unknown.",
-                  "| Recording | Lap | Sector | Delta s | Reason |", "| --- | --- | --- | --- | --- |"]
-        lines += [f"| {c['session']} | {c['lap']} | {flag['sector']} | {flag['loss_s']:.3f} | {flag['reason']} |"
-                  for c, flag in flagged]
-    return lines
-
-
 def finalize_debrief(evidence_path: Path, coaching: dict):
     """Validate the host's structured interpretation, then publish matching local reports."""
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
@@ -477,36 +389,27 @@ def finalize_debrief(evidence_path: Path, coaching: dict):
                 raise ValueError(f"Missing coaching fields: {required}")
     if any(h["confidence"] not in {"low", "moderate", "high"} for h in hypotheses):
         raise ValueError("Confidence must be low, moderate or high")
+    sections = coaching.get("sections", [])
+    if "language" in coaching and (not isinstance(coaching["language"], str) or
+                                  not coaching["language"].startswith(("zh", "en"))):
+        raise ValueError("Report language must start with zh or en")
+    if not isinstance(sections, list) or any(not isinstance(section, dict) or
+            section.get("observation_id") not in ids for section in sections):
+        raise ValueError("Report sections must reference existing observation IDs")
+    for section in sections:
+        if any(key in section and not isinstance(section[key], str) for key in
+               ("title", "what_happened", "interpretation", "cue", "watch_out")):
+            raise ValueError("Report section text must be strings")
     evidence.update(status="coaching_complete", hypotheses=hypotheses,
                     practice_plan=experiments, coaching_summary=coaching["summary"])
-    lines = ["# Track coaching debrief", "", coaching["summary"]]
-    lines += _timing_tables(evidence)
-    lines += ["", "## Measured evidence", ""]
-    for obs in evidence["observations"]:
-        if "sector" in obs:
-            lines += [f"- {obs['id']}: sector {obs['sector']}, median measured difference "
-                      f"{obs['median_loss_s']:.3f} s across {obs['compared_laps']} laps, "
-                      f"{obs['repeat_count']} repeat observations above screening resolution. "
-                      f"Confidence: {obs['confidence']}."]
-        else:
-            lines += [f"- {obs['id']}: {obs['measured']}. {json.dumps(obs['values'])}"]
-    lines += ["", "## Hypotheses", ""]
-    lines += [f"- {h['explanation']} Confidence: {h['confidence']}. "
-              f"Evidence: {', '.join(h['observation_ids'])}. Confounders: {h['confounders']}."
-              for h in hypotheses]
-    lines += ["", "## Next-session experiments", ""]
-    for i, experiment in enumerate(experiments, 1):
-        lines += [f"### {i}. {experiment['location']}", ""]
-        lines += [f"- {key.replace('_', ' ')}: {experiment[key]}" for key in
-                  ("change", "baseline", "success_measure", "abort_condition", "re_test", "observation_ids")]
-        lines += [""]
-    lines += ["## Confounders and unavailable data", "", *evidence["confounders"],
-              json.dumps(evidence["unavailable_data"]),
-              "See evidence.json for diagnostic and plot-specific unavailable reasons."]
-    markdown = "\n".join(lines)
+    from .coaching_report import render_report
+
+    markdown, document = render_report(evidence, coaching)
+    evidence["report_presentation"] = {key: coaching[key] for key in
+                                       ("language", "title", "sections") if key in coaching}
     directory = evidence_path.parent
     (directory / "report.md").write_text(markdown, encoding="utf-8")
-    (directory / "report.html").write_text(_report_html(markdown, evidence), encoding="utf-8")
+    (directory / "report.html").write_text(document, encoding="utf-8")
     evidence_path.write_text(json.dumps(evidence, indent=2, allow_nan=False), encoding="utf-8")
     return {"status": evidence["status"], "report_md": str(directory / "report.md"),
             "report_html": str(directory / "report.html")}

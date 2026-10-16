@@ -159,6 +159,35 @@ def test_finalization_validates_before_publishing(tmp_path):
     assert "<pre>" not in (tmp_path / "report.html").read_text()
 
 
+def test_chinese_report_has_spatial_figures_and_no_raw_field_dump(tmp_path):
+    from track_telemetry.coaching_report import render_report
+
+    evidence = build_debrief([_session(22), _session(20)], tmp_path,
+                             same_layout_confirmed=True, plots=False)["evidence"]
+    assert len(evidence["reference_geometry"]["points"]) > 10
+    loss = next(o for o in evidence["observations"] if "sector" in o)
+    coaching = {"summary": "先复现快圈，再逐项练习。", "language": "zh-CN", "hypotheses": [
+                    {"observation_ids": ["session-0"], "explanation": "未记录机油压力，不能验证油压安全。",
+                     "confidence": "low", "confounders": ["缺少数据"]}],
+                "sections": [{"observation_id": loss["id"], "title": "看图定位这个区段",
+                              "interpretation": "<script>not executable</script>"}],
+                "experiments": [{"observation_ids": [loss["id"]], "location": "distance 1234 m",
+                                 "change": "固定一个参照", "baseline": "已记录的速度",
+                                 "success_measure": "三个可比样本", "abort_condition": "有交通就停止",
+                                 "re_test": "下一节复测"}]}
+    markdown, document = render_report(evidence, coaching)
+    assert 'lang="zh-CN"' in document
+    assert document.count('<svg ') >= 3
+    assert 'href="#zone-A"' in document
+    assert "只改这一项" in document and "候选快圈" in document
+    assert "median_loss_s" not in document
+    assert "Session and stint timing" not in document
+    assert "distance 1234 m" not in document
+    assert "<script>" not in document and "&lt;script&gt;" in document
+    assert "固定一个参照" in markdown
+    assert "未记录机油压力" in document and "未记录机油压力" in markdown
+
+
 def test_all_stints_and_mcp(tmp_path, monkeypatch):
     path = tmp_path / "multi.rcz"
     _build_multi_stint_archive(path)
