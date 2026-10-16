@@ -145,3 +145,13 @@ before prescribing; do not diagnose an already-full-pedal sector as late power.
 Keep the four concise signal findings, but name the upstream action to practise
 and measure the full linked window. Official corner/straight identity still needs
 external confirmation.
+
+Concision governs presentation, not reasoning. Compare competing line/turn-timing,
+braking and exit-state explanations before prescribing. Similar G/steering peaks
+neither prove nor exclude a line problem. Higher brake pressure may be a response
+to a tighter path. Inspect local GPS shape across spatial fit spans and repeated
+passes; `local_gps_geometry` is an approximate circle model, not track edges or
+available grip. Put the resulting short line finding in `line_analysis`. Never
+fill uncertainty with a generic brake-release/consistency instruction. If no
+correction is justified, finalize zero `experiments` with a concrete nonempty
+`validation_plan`; checking a hypothesis is a valid next-session plan.

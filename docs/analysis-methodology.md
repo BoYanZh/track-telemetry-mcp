@@ -250,27 +250,15 @@ Each change should contain:
 - **success condition** — what better execution looks like;
 - **abort condition** — what indicates the change should not be pushed further.
 
-Example:
+Before selecting a change, compare line/turn timing, brake strategy, and entry or
+exit state as competing explanations. Similar peak G does not establish an equal
+path radius: speed, G direction, location and duration all matter. Larger brake
+pressure may be responding to a tighter path. A local GPS circle fit is only an
+approximation; test sensitivity to spatial span and repeated passages, and keep
+GPS drift and missing track edges explicit. Do not turn a peak metric into an
+instruction to alter release. When geometry or causation remains unresolved,
+write a concrete validation plan instead of forcing a driving correction.
 
-```text
-Hypothesis:
-The driver is overslowing because the main braking phase extends too far into turn-in.
-
-Change:
-Finish the main deceleration slightly earlier and release more decisively.
-
-Cue:
-Begin releasing as steering load builds instead of holding a large brake input to minimum speed.
-
-Metric:
-Higher minimum speed with similar or earlier brake onset and shorter high-pressure duration.
-
-Success:
-The gain repeats across several clean laps without larger steering corrections.
-
-Abort:
-The car becomes difficult to place, requires unexpected countersteer, or reduces track margin.
-```
 
 Limit a normal debrief to the highest-value one to three changes.
 

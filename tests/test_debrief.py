@@ -118,6 +118,19 @@ def test_missing_gps_and_no_laps(tmp_path):
         build_debrief([], tmp_path)
 
 
+def test_unresolved_cause_allows_validation_instead_of_forced_driving_change(tmp_path):
+    build_debrief([_session(20)], tmp_path, plots=False)
+    coaching = {"summary": "原因未确认。", "hypotheses": [], "experiments": [], "language": "zh-CN"}
+    with pytest.raises(ValueError, match="validation_plan"):
+        finalize_debrief(tmp_path / "evidence.json", coaching)
+    coaching["validation_plan"] = "先核对路线参照，& 不指定松刹动作。"
+    finalize_debrief(tmp_path / "evidence.json", coaching)
+    document = (tmp_path / "report.html").read_text(encoding="utf-8")
+    assert "先验证原因" in document and "&amp;" in document
+    evidence = json.loads((tmp_path / "evidence.json").read_text())
+    assert evidence["practice_plan"] == [] and evidence["validation_plan"]
+
+
 def test_recorded_stint_without_timed_laps_is_preserved(tmp_path):
     session = _session()
     session.metadata["stints"] = [{"stint": 0}, {"stint": 1}]

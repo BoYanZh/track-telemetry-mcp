@@ -4,7 +4,7 @@ import html
 import numpy as np
 
 
-def _route_view(passages, selected, baseline, donor, label, zh):
+def _route_view(passages, selected, baseline, donor, label, zh, *, shape_check=None):
     points = [point for p in selected for path in p.get("gps_cause_paths", p.get("gps_core_paths", p["gps_paths"])) for point in path]
     if not points:
         return ""
@@ -36,6 +36,16 @@ def _route_view(passages, selected, baseline, donor, label, zh):
                           f'stroke-width="{2.5 if highlight else 1}" opacity="{1 if highlight else .2}"><title>'
                           + html.escape(label(p["session"], p["lap"])) + '</title></path>')
     x0, y0, width, height = map(float, initial.split())
+    for row in (shape_check or {}).get("passes", []):
+        key = row["session"], row["lap"]
+        if key not in (baseline, donor):
+            continue
+        fit = row.get("minimum_fitted_radius_by_span_m", {}).get("30.0")
+        if fit:
+            color = "#ba4a20" if key == baseline else "#126d82"
+            title = text("局部最紧处候选，30米GPS圆拟合半径约", "Local tightest candidate, 30 m GPS fit radius ~") + f"{fit['radius_m']:.0f} m"
+            pieces.append(f'<circle cx="{fit["x_m"]:.3f}" cy="{-fit["y_m"]:.3f}" r="{width*.009:.3f}" '
+                          f'fill="{color}" stroke="white" stroke-width="2" vector-effect="non-scaling-stroke"><title>{html.escape(title)}</title></circle>')
     length = max(1., 10 ** np.floor(np.log10(width / 6)))
     x, y, font = x0 + width * .07, y0 + height * .93, width / 48
     pieces.append(f'<path d="M{x:.3f},{y:.3f}h{length:.3f}" stroke="#26343c" stroke-width="3" vector-effect="non-scaling-stroke"/>'
@@ -84,7 +94,10 @@ def render_corner(observation, label, zh, *, description=None):
     donor = observation["section_reference"]
     donor = donor["session"], donor["lap"]
     selected = [p for key in (baseline, donor) for p in passages if (p["session"], p["lap"]) == key]
-    pieces = [_route_view(passages, selected, baseline, donor, label, zh)]
+    pieces = [_route_view(passages, selected, baseline, donor, label, zh, shape_check=observation.get("route_shape_check"))]
+    if description.get("line_analysis"):
+        pieces.append('<p class="line-finding"><strong>' + ("走线：" if zh else "Line: ")
+                      + '</strong>' + html.escape(description["line_analysis"]) + '</p>')
     timing = observation["corner_passages"].get("timing_check", {})
     if timing:
         difference = timing["context_difference_s"]

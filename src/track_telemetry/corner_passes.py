@@ -10,6 +10,15 @@ from .geometry import latlon_to_xy_m
 from .gg import analyze_gg_usage
 from .mini_sectors import _speed
 from .quality import channel_source, matched_window, native_rate
+from .route_geometry import route_geometry_profile
+
+
+def _geometry(passage, positions):
+    rates = [v["native_sample_rate_hz"] for v in passage["gps_provenance"].values()]
+    if any(r is None or not np.isfinite(r) or r < 5 for r in rates):
+        passage["local_gps_geometry_unavailable_reason"] = "Verified native GPS >=5 Hz required; output rate cannot qualify geometry"
+        return []
+    return route_geometry_profile(passage["gps_position_samples"], positions, native_rate_hz=min(rates))
 
 
 def measure_passages(sessions, observation, comparisons, self_result, reference_index, *, mini_sector_analysis=None):
@@ -58,6 +67,10 @@ def measure_passages(sessions, observation, comparisons, self_result, reference_
             longitude[matched] = longitude_series.values[nearest[matched]]
         x, y = latlon_to_xy_m(latitude.values, longitude, **origin)
         valid = np.isfinite(x) & np.isfinite(y)
+        segments = np.cumsum(~valid | np.r_[False, np.diff(times) > .25])
+        entry["gps_position_samples"] = [{"time_s": float(t), "progress": float(np.interp(t-lap.start_s, elapsed, progress)),
+            "x_m": float(px), "y_m": float(py), "segment_id": int(segment)}
+            for t, px, py, good, segment in zip(times, x, y, valid, segments) if good]
         # Split at missing samples or logger gaps; display decimation never bridges either.
         paths, path = [], []
         for i in range(len(times)):
@@ -127,12 +140,15 @@ def measure_passages(sessions, observation, comparisons, self_result, reference_
             entry["g_samples"] = []
         passages.append(entry)
     timing_check = {}
+    positions = np.linspace(lo, hi, 81)
     baseline = next((p for p in passages if (p["session"], p["lap"]) ==
                      (observation.get("example_session"), observation.get("example_lap"))), None)
     donor = observation.get("section_reference", {})
     donor = next((p for p in passages if (p["session"], p["lap"]) ==
                   (donor.get("session"), donor.get("lap"))), None)
     if baseline and donor:
+        for passage in (baseline, donor):
+            passage["local_gps_geometry"] = _geometry(passage, positions)
         core_difference = baseline["core_duration_s"] - donor["core_duration_s"]
         context_difference = baseline["context_duration_s"] - donor["context_duration_s"]
         timing_check = {"core_difference_s": core_difference, "context_difference_s": context_difference,
@@ -151,6 +167,8 @@ def measure_passages(sessions, observation, comparisons, self_result, reference_
                 continue
             p = next((p for p in passages if (p["session"], p["lap"]) == (row["session"], row["lap"])), None)
             if p:
+                if "local_gps_geometry" not in p:
+                    p["local_gps_geometry"] = _geometry(p, positions)
                 upstream = [b for b in p["input_analysis"].get("brake_events", []) if b["end_s"] <= p["core_start_s"]]
                 near_best.append({key: p[key] for key in ("session", "lap", "core_duration_s", "context_duration_s")}
                                  | {"last_upstream_brake": upstream[-1] if upstream else None})

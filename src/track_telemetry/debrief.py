@@ -35,8 +35,8 @@ Separate observations, hypotheses, confidence, confounders and unavailable data.
 Select at most three experiments. Each needs a location, one changed behavior, baseline,
 success measurement, safety/abort condition and next-session re-test.
 Distinguish early braking, overslow, weak/long braking, late power, weak exit,
-line issues and already-good-enough. Do not infer causation, ABS, sideslip,
-surface or available grip. Preserve accelerator-pedal versus throttle-body semantics.
+line issues and already-good-enough. Treat causal explanations as hypotheses,
+not measurements. Do not infer ABS, sideslip, surface or available grip. Preserve accelerator-pedal versus throttle-body semantics.
 Prefer repeatability and small steps in fast sections; never prescribe added slide.
 Do not promise theoretical gains. If layout is unconfirmed, obtain independent
 confirmation before comparing. Do not stop at plots. Mark coaching complete only
@@ -61,10 +61,15 @@ Coaching fields: summary, hypotheses and experiments. Each hypothesis needs
 observation_ids, explanation, confidence and confounders. Each experiment needs
 observation_ids, location, change, baseline, success_measure, abort_condition and re_test.
 Keep corner reports concise: one power, one brake, steering and planar combined G,
-with one short finding each; retain detailed channels in evidence.
+with short findings for presentation only; retain full reasoning and competing
+hypotheses in evidence. Compare line geometry, turn timing, brake response and
+exit state before selecting a cause. Similar G or steering peaks do not rule line
+geometry in or out. Brake differences may respond to a tighter line, not cause it.
+If a driving correction is not justified, use zero experiments with validation_plan
+rather than inventing a generic release/consistency cue.
 Match the user's language throughout. Optional language (zh-CN/en), title and
 sections entries (observation_id, title, what_happened, interpretation, cue,
-watch_out, braking_analysis, steering_analysis, power_analysis, g_analysis) produce a localized illustrated report. Explain locations using the
+watch_out, braking_analysis, steering_analysis, power_analysis, g_analysis, line_analysis) produce a localized illustrated report. Explain locations using the
 report's highlighted GPS map, not distance-only descriptions or unverified
 official corner names. Keep raw fields and provenance in JSON, not human prose.
 """
@@ -376,8 +381,11 @@ def finalize_debrief(evidence_path: Path, coaching: dict):
         raise ValueError("Coaching requires a nonempty summary")
     hypotheses = coaching.get("hypotheses")
     experiments = coaching.get("experiments")
-    if not isinstance(hypotheses, list) or not isinstance(experiments, list) or not 1 <= len(experiments) <= 3:
-        raise ValueError("Provide hypotheses and one to three experiments")
+    if not isinstance(hypotheses, list) or not isinstance(experiments, list) or len(experiments) > 3:
+        raise ValueError("Provide hypotheses and at most three experiments")
+    validation = coaching.get("validation_plan", "")
+    if not isinstance(validation, str) or (not experiments and not validation.strip()):
+        raise ValueError("Without a driving experiment, provide a nonempty validation_plan")
     for items, required in (
         (hypotheses, ("explanation", "confidence", "confounders")),
         (experiments, ("location", "change", "baseline", "success_measure", "abort_condition", "re_test")),
@@ -400,10 +408,10 @@ def finalize_debrief(evidence_path: Path, coaching: dict):
     for section in sections:
         if any(key in section and not isinstance(section[key], str) for key in
                ("title", "what_happened", "interpretation", "cue", "watch_out",
-                "braking_analysis", "steering_analysis", "power_analysis", "g_analysis")):
+                "braking_analysis", "steering_analysis", "power_analysis", "g_analysis", "line_analysis")):
             raise ValueError("Report section text must be strings")
     evidence.update(status="coaching_complete", hypotheses=hypotheses,
-                    practice_plan=experiments, coaching_summary=coaching["summary"])
+                    practice_plan=experiments, validation_plan=validation, coaching_summary=coaching["summary"])
     from .coaching_report import render_report
 
     markdown, document = render_report(evidence, coaching)

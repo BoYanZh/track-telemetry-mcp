@@ -194,12 +194,16 @@ def render_report(evidence, coaching):
         md += ["", f"## {zone['letter']} · {heading}", "", description.get("what_happened", ""),
                tr(f"实测区段差约 {difference:.2f} 秒。", f"Measured section difference: {difference:.2f} s."),
                description.get("interpretation", ""), description.get("cue", ""), description.get("watch_out", "")]
-        md.extend(description[key] for key in ("braking_analysis", "steering_analysis", "power_analysis", "g_analysis")
+        md.extend(description[key] for key in ("line_analysis", "braking_analysis", "steering_analysis", "power_analysis", "g_analysis")
                   if description.get(key))
         if not description.get("interpretation"):
             md.extend(h["explanation"] for h in linked)
-    bodies.append('<section><h2>' + tr("下一节只做这些练习", "Next-session experiments") + '</h2>')
+    bodies.append('<section><h2>' + (tr("下一节只做这些练习", "Next-session experiments") if coaching["experiments"]
+                                   else tr("先验证原因", "Validate the cause first")) + '</h2>')
     md += ["", "## " + tr("下一节练习", "Next-session experiments"), ""]
+    if coaching.get("validation_plan"):
+        bodies.append(paragraphs(coaching["validation_plan"]))
+        md += [coaching["validation_plan"], ""]
     for index, experiment in enumerate(coaching["experiments"], 1):
         located = [zone_by_id[key] for key in experiment["observation_ids"] if key in zone_by_id]
         location = " / ".join(f"{z['letter']} · {z['location']}" for z in located) if located else experiment["location"]
