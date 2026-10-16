@@ -112,3 +112,14 @@ For source semantics, incident rules, output format, and risk-aware coaching gui
 Task-specific prompts are in [`prompts/`](prompts/).
 
 Default corner presentation: exactly one power-control trace (prefer accelerator pedal), one brake trace (prefer pressure), steering, and planar combined G = hypot(lat_g, long_g). Use one short finding per item; omit duplicate sensors and repeated caveats. Keep detailed channels and provenance in JSON.
+
+Treat mini-sectors as loss locators, not causal corner boundaries. Inspect
+`corner_passages.chain_window` and split upstream/target/downstream timing.
+The provisional window follows verified brake events toward the next brake,
+using shared physical limits for both laps. Missing events fall back explicitly;
+lap boundaries truncate the chain. Non-overlapping upstream events may be different
+corners, not a matched action. Trace exit-speed deficits into downstream acceleration
+before prescribing; do not diagnose an already-full-pedal sector as late power.
+Keep the four concise signal findings, but name the upstream action to practise
+and measure the full linked window. Official corner/straight identity still needs
+external confirmation.

@@ -47,6 +47,9 @@ use all eligible local mini-sectors for virtual-best analysis, including good
 sections on otherwise slower laps. Inspect context and interruption flags.
 Pace screening cannot confirm intent or a clean lap. Prefer driver/video lap_context
 annotations when available, and never label an excluded slow lap as traffic by inference.
+Mini-sectors locate loss, not its cause. Inspect chain_window and upstream/target/
+downstream timing; trace the previous corner exit into downstream acceleration.
+Use shared physical limits, note missing/mismatched brake anchors and lap truncation.
 Before prescribing, inspect corner_passages.timing_check and near_best_passages: a
 sector donor can lose its advantage across adjoining sectors. Explain recorded
 braking, steering and pedal evidence, including contradictions, using input_analysis.

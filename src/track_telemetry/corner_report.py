@@ -5,7 +5,7 @@ import numpy as np
 
 
 def _route_view(passages, selected, baseline, donor, label, zh):
-    points = [point for p in selected for path in p.get("gps_core_paths", p["gps_paths"]) for point in path]
+    points = [point for p in selected for path in p.get("gps_cause_paths", p.get("gps_core_paths", p["gps_paths"])) for point in path]
     if not points:
         return ""
     def bounds(points):
@@ -22,7 +22,7 @@ def _route_view(passages, selected, baseline, donor, label, zh):
     pieces = ['<figure class="route-view"><h3>' + text("每次过弯的真实路线", "Every recorded passage")
               + '</h3><div class="route-toolbar">']
     for action, title in (("in", text("放大 ＋", "Zoom in")), ("out", text("缩小 −", "Zoom out")),
-                          ("reset", text("本段特写", "Target detail")), ("context", text("查看前后弯", "Context"))):
+                          ("reset", text("相关弯道", "Related corner")), ("context", text("弯道与后续路段", "Corner and downstream"))):
         pieces.append(f'<button type="button" data-route-action="{action}">{title}</button>')
     pieces.append('</div><svg class="route-canvas" viewBox="' + initial + '" data-initial="' + initial
                   + '" data-context="' + context + '" role="img" aria-label="GPS passages">')
@@ -41,7 +41,7 @@ def _route_view(passages, selected, baseline, donor, label, zh):
     pieces.append(f'<path d="M{x:.3f},{y:.3f}h{length:.3f}" stroke="#26343c" stroke-width="3" vector-effect="non-scaling-stroke"/>'
                   f'<text x="{x:.3f}" y="{y-font:.3f}" font-size="{font:.3f}">{length:g} m</text>')
     pieces.append('</svg><figcaption>' + text(
-        f"共 {len(passages)} 次通过。橙：整圈最快；蓝：本段最快；灰：其他圈。默认放大目标段，可用按钮缩放、拖动平移，再切换前后弯。北朝上，横纵比例一致；路线散布包含 GPS 漂移，不是赛道边界。",
+        f"共 {len(passages)} 次通过。橙：整圈最快；蓝：本段最快；灰：其他圈。默认查看相关上游动作，可放大、平移或展开后续路段。北朝上，横纵比例一致；路线散布包含 GPS 漂移，不是赛道边界。",
         "Orange: best whole lap; blue: sector donor; grey: other passages. Zoom buttons and drag to pan. North up, equal scale. Scatter includes GPS drift; these are not track boundaries.") + '</figcaption></figure>')
     return "".join(pieces)
 
@@ -88,8 +88,20 @@ def render_corner(observation, label, zh, *, description=None):
     timing = observation["corner_passages"].get("timing_check", {})
     if timing:
         difference = timing["context_difference_s"]
-        message = (f"把前后相邻段一起算：整圈最快圈相对该来源圈{'慢' if difference >= 0 else '快'} {abs(difference):.3f} 秒。单段差异不能直接作为可拿回的时间。"
-                   if zh else f"Adjoining-window signed deficit: {difference:+.3f} s. A sector deficit alone is not a recoverable gain.")
+        message = (f"关联窗口合计：整圈最快圈相对来源圈{'慢' if difference >= 0 else '快'} {abs(difference):.3f} 秒。"
+                   if zh else f"Linked-window signed deficit: {difference:+.3f} s.")
+        if "upstream_difference_s" in timing:
+            parts = [("上游动作", "Upstream", timing["upstream_difference_s"]),
+                     ("目标计时段", "Target", timing["core_difference_s"]),
+                     ("后续路段", "Downstream", timing["downstream_difference_s"])]
+            message += " / ".join(f"{cn if zh else en} {value:+.3f}s" for cn, en, value in parts)
+        chain = observation["corner_passages"].get("chain_window", {})
+        if chain.get("method") == "braking_to_next_braking":
+            message += ("；截至圈末，未跨圈追踪。" if chain["end_progress"] >= 1 else "；截至两圈较早的下一次制动前。") if zh else ""
+            if not chain.get("upstream_events_overlap_on_reference") and zh:
+                message += "上游制动事件未确认对应，需复核。"
+        elif chain.get("method") == "fixed_context_fallback" and zh:
+            message += "未识别到可靠动作边界，当前仅为邻近窗口。"
         pieces.insert(0, '<p class="notice">' + message + '</p>')
     lo = observation["corner_passages"]["context_start_progress"]
     hi = observation["corner_passages"]["context_end_progress"]
@@ -167,9 +179,9 @@ def render_corner(observation, label, zh, *, description=None):
                 d.append(("L" if connected else "M") + f'{60+(progress-lo)/(hi-lo)*670:.1f},{ordinate(value):.1f}')
                 previous = time
             pieces.append(f'<path d="{" ".join(d)}" fill="none" stroke="{color}" stroke-width="2"/>')
-        pieces.append('<text x="60" y="215">' + ("弯前 → 目标段 → 弯后" if zh else "Previous → target → following sector, physically aligned") + '</text></svg></figure>')
+        pieces.append('<text x="60" y="215">' + ("上游动作 → 目标段 → 后续加速" if zh else "Previous → target → following sector, physically aligned") + '</text></svg></figure>')
     for key in analysis:
         explain(key)
     pieces.append('</div>')
-    pieces.append('<p class="note">' + ("浅色带为目标段；总 G = √(横向 G² + 纵向 G²)，不是抓地极限。" if zh else "Shading marks the target. Combined G = hypot(lateral G, longitudinal G), not available grip.") + '</p>')
+    pieces.append('<p class="note">' + ("浅色带是发现差距的计时段，不代表问题所在弯道；总 G = √(横向 G² + 纵向 G²)，不是抓地极限。" if zh else "Shading marks the target. Combined G = hypot(lateral G, longitudinal G), not available grip.") + '</p>')
     return "".join(pieces)

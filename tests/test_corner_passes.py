@@ -21,6 +21,8 @@ def test_all_passages_and_unverified_g_are_preserved(tmp_path):
             assert p["gps_paths"]
             assert p["gps_core_paths"]
             assert p["core_duration_s"] <= p["context_duration_s"]
+            assert abs(p["upstream_duration_s"] + p["core_duration_s"]
+                       + p["downstream_duration_s"] - p["context_duration_s"]) < 1e-9
             assert "brake_events" in p["input_analysis"]
             assert "unavailable_reason" in p["g_usage"]
             assert not p["g_samples"]
@@ -52,6 +54,8 @@ def test_all_passages_and_unverified_g_are_preserved(tmp_path):
         assert abs(timing["core_difference_s"] - o["measured_difference_s"]) < 1e-6
         assert abs(timing["context_difference_s"] - timing["core_difference_s"]
                    - timing["adjacent_only_difference_s"]) < 1e-9
+        assert abs(timing["upstream_difference_s"] + timing["core_difference_s"]
+                   + timing["downstream_difference_s"] - timing["context_difference_s"]) < 1e-9
 
 
 def test_corner_g_uses_bounded_measured_window_and_native_rate_gate(tmp_path):
@@ -85,6 +89,20 @@ def test_missing_longitude_splits_actual_route_instead_of_interpolating():
     observation = {"physical_section_profile": [{"progress": .4}, {"progress": .45}]}
     result = measure_passages([session], observation, [], aligned, 0)
     assert len(result["passages"][0]["gps_paths"]) == 2
+
+
+def test_chain_end_roundoff_does_not_escape_lap(monkeypatch):
+    session = _session(20)
+    session.metadata["channel_sources"] = {"lat_g": "imu", "long_g": "imu"}
+    aligned = compare_reference_laps(session, 1, session, 1, same_layout_confirmed=True)
+    aligned["profile"][-1]["lap_a_elapsed_s"] += 1e-10
+    monkeypatch.setattr("track_telemetry.corner_passes.select_chain_window",
+                        lambda *args: {"start_progress": .8, "end_progress": 1.})
+    observation = {"physical_section_profile": [{"progress": .8}, {"progress": .85}]}
+    result = measure_passages([session], observation, [], aligned, 0)
+    passage = result["passages"][0]
+    assert passage["end_s"] == session.lap(1).end_s
+    assert "unavailable_reason" not in passage["g_usage"]
 
 
 def test_pedal_duration_does_not_bridge_missing_samples_or_clock_gaps():

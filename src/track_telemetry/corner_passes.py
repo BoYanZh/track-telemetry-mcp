@@ -4,9 +4,11 @@ from __future__ import annotations
 import numpy as np
 
 from .channels import GPS_LATITUDE_DEG, GPS_LONGITUDE_DEG, LAT_G, LONG_G
+from .corner_chain import select_chain_window
 from .corner_inputs import summarize_inputs
 from .geometry import latlon_to_xy_m
 from .gg import analyze_gg_usage
+from .mini_sectors import _speed
 from .quality import channel_source, matched_window, native_rate
 
 
@@ -16,7 +18,8 @@ def measure_passages(sessions, observation, comparisons, self_result, reference_
                if "profile" in c["result"]}
     results[reference_index, self_result["lap_a"]["number"]] = self_result
     core = observation["physical_section_profile"]
-    lo, hi = max(0., core[0]["progress"] - .05), min(1., core[-1]["progress"] + .05)
+    chain = select_chain_window(sessions, observation, results)
+    lo, hi = chain["start_progress"], chain["end_progress"]
     ref = sessions[reference_index]
     lap = ref.lap(self_result["lap_a"]["number"])
     lat = ref.channel(GPS_LATITUDE_DEG).slice(lap.start_s, lap.end_s).values
@@ -29,13 +32,18 @@ def measure_passages(sessions, observation, comparisons, self_result, reference_
         profile = result["profile"]
         progress = np.array([p["progress"] for p in profile])
         elapsed = np.array([p["lap_a_elapsed_s"] for p in profile])
-        start, end = lap.start_s + np.interp([lo, hi], progress, elapsed)
-        core_start, core_end = lap.start_s + np.interp(
-            [core[0]["progress"], core[-1]["progress"]], progress, elapsed)
+        # Alignment elapsed arithmetic can overshoot the exact lap end by roundoff.
+        start, end = np.clip(lap.start_s + np.interp([lo, hi], progress, elapsed), lap.start_s, lap.end_s)
+        core_start, core_end = np.clip(lap.start_s + np.interp(
+            [core[0]["progress"], core[-1]["progress"]], progress, elapsed), lap.start_s, lap.end_s)
         entry = {"session": index, "lap": number, "start_s": float(start), "end_s": float(end),
                  "core_start_s": float(core_start), "core_end_s": float(core_end),
                  "core_duration_s": float(core_end - core_start), "context_duration_s": float(end - start),
+                 "upstream_duration_s": float(core_start - start), "downstream_duration_s": float(end - core_end),
                  "alignment_quality": result.get("alignment_quality", {})}
+        entry["chain_speeds_kmh"] = {name: _speed(profile, p) for name, p in
+            (("upstream_start", lo), ("target_start", core[0]["progress"]),
+             ("target_end", core[-1]["progress"]), ("downstream_end", hi))}
         latitude = session.channel(GPS_LATITUDE_DEG).slice(start, end)
         times = latitude.timestamps
         longitude_series = session.channel(GPS_LONGITUDE_DEG).slice(start, end)
@@ -74,6 +82,19 @@ def measure_passages(sessions, observation, comparisons, self_result, reference_
         if path:
             core_paths.append(path)
         entry["gps_core_paths"] = core_paths
+        cause_paths, path = [], []
+        cause_end = core_start if core_start - start >= 1 else core_end
+        for i in range(len(times)):
+            inside = valid[i] and times[i] <= cause_end
+            if not inside or (i and times[i] - times[i - 1] > .25):
+                if path:
+                    cause_paths.append(path)
+                path = []
+            if inside:
+                path.append([float(x[i]), float(y[i])])
+        if path:
+            cause_paths.append(path)
+        entry["gps_cause_paths"] = cause_paths
         entry["gps_provenance"] = {name: {"source": channel_source(session, name, number),
             "native_sample_rate_hz": native_rate(session, name, number),
             "output_sample_rate_hz": session.channel(name).sample_rate_hz}
@@ -115,6 +136,8 @@ def measure_passages(sessions, observation, comparisons, self_result, reference_
         core_difference = baseline["core_duration_s"] - donor["core_duration_s"]
         context_difference = baseline["context_duration_s"] - donor["context_duration_s"]
         timing_check = {"core_difference_s": core_difference, "context_difference_s": context_difference,
+                        "upstream_difference_s": baseline["upstream_duration_s"] - donor["upstream_duration_s"],
+                        "downstream_difference_s": baseline["downstream_duration_s"] - donor["downstream_duration_s"],
                         "adjacent_only_difference_s": context_difference - core_difference,
                         "sign_convention": "Positive means best whole lap took longer than this donor; not a guaranteed gain."}
     near_best = []
@@ -132,8 +155,9 @@ def measure_passages(sessions, observation, comparisons, self_result, reference_
                 near_best.append({key: p[key] for key in ("session", "lap", "core_duration_s", "context_duration_s")}
                                  | {"last_upstream_brake": upstream[-1] if upstream else None})
     return {"context_start_progress": lo, "context_end_progress": hi, "passages": passages,
+            "chain_window": chain,
             "timing_check": timing_check,
             "near_best_passages": near_best,
-            "limitations": ["Context includes adjacent mini-sectors, not an identified complete corner.",
+            "limitations": ["Provisional action-linked window or explicit fixed fallback; not an identified complete corner or straight.",
                             "GPS scatter includes drift; line differences do not establish causation.",
                             "Each trace is a real passage; no continuous theoretical-best trajectory exists."]}

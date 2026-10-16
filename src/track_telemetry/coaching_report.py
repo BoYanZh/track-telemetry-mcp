@@ -143,11 +143,11 @@ def render_report(evidence, coaching):
                       + '</h2>' + _map(evidence, sector_map, zh)
                       + '<p class="note">' + tr("数字对应下方矩阵的列，不是官方弯号。", "Numbers match matrix columns, not official corners.") + '</p></section>' + mini_html)
         calculation_details += '</details>'
-    bodies.append('<section id="track"><h2>' + tr("先找到位置，再看诊断", "Locate each finding") + '</h2>'
+    bodies.append('<section id="track"><h2>' + tr("计时差出现的位置", "Locate each finding") + '</h2>'
                   + _map(evidence, zones, zh) + '<div class="map-key">'
                   + "".join(f'<a href="#zone-{z["letter"]}" style="--zone:{z["color"]}">{z["letter"]} · {_escape(z["location"])}</a>' for z in zones)
                   + '</div><p class="note">' + tr(
-                      "北朝上；箭头按记录顺序表示行驶方向。彩色段是本次分析位置，灰线是采样轨迹，不是赛道边界。A/B/C 是本报告的位置标记，不是官方弯号。",
+                      "A/B/C 标记计时差出现的区段；动作原因可能在上游弯道。北朝上，箭头表示行驶方向；灰线是采样轨迹，不是赛道边界。",
                       "North up; arrows follow sample order. Highlights locate the findings. GPS lines are not track boundaries; letters are not official corner names.") + '</p></section>')
     descriptions = {item["observation_id"]: item for item in coaching.get("sections", [])}
     section_order = {key: index for index, key in enumerate(descriptions)}
