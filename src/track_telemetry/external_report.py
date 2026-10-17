@@ -14,36 +14,40 @@ def render_external_scan(scan, coaching, evidence, zh):
     descriptions = {s["observation_id"]: s for s in coaching.get("sections", [])}
     decisions = {d["observation_id"]: d for d in scan.get("practice_decisions", [])}
     selected |= set(descriptions) & set(windows)
-    pieces = ['<section id="external-scan"><h2>' + tr("高手对照：全路线时间差排名", "External reference: whole-route difference ranking") + '</h2><p>' + tr(
-        "逐一检查所有区段，独立于自己的圈间排名。下表是实测差距；下一节练习由后面的计划单独选择。区段编号固定对应赛道位置，不是官方弯号。",
-        "Every sector is screened independently of own-lap ranking. Observed differences and practice selection are separate. Sector IDs locate windows, not official corners.") + '</p><table><tr><th>' + tr("位置", "Location") + '</th><th>' + tr("目标段差/关联窗口差", "Core/linked difference") + '</th><th>' + tr("目标段最低速：你/参考", "Core minimum speed: you/reference") + '</th><th>' + tr("重复支持", "Repeated support") + '</th><th>' + tr("本节状态", "Practice status") + '</th></tr>']
-    sources = ' / '.join(html.escape(str(item['summary'].get('source_name', item['summary'].get('session_id', item['index']))))
-                         for item in scan['references'])
-    missing = [f"S{w['sector']:02}" for w in scan['windows'] if not w.get('passages')]
-    coverage = tr(f"匹配覆盖：{len(ranked)}/{len(windows)} 段。", f"Coverage: {len(ranked)}/{len(windows)} windows.")
-    coverage += tr(f"你的基线：第{scan['baseline_lap']}圈；参考文件：", f"Baseline lap {scan['baseline_lap']}; reference files: ") + sources
-    if missing:
-        coverage += tr("；未匹配：", "; unmatched: ") + ', '.join(missing)
-    pieces[0] = pieces[0].replace('</h2>', '</h2><p>'+coverage+'</p>', 1)
-    md = ['## ' + tr("高手全路线时间差排名（独立于练习排序）", "External differences, independent of practice ranking"), '']
-    for w in ranked:
+    focus_ids = [key for key in scan.get("practice_ranking", []) if key in windows]
+    if not focus_ids:
+        focus_ids = [w["id"] for w in ranked if w["id"] in selected]
+    focus = [windows[key] for key in focus_ids[:3]] or ranked[:3]
+    focus_keys = {w["id"] for w in focus}
+    other = [w for w in ranked if w["id"] not in focus_keys]
+    pieces = ['<section id="external-scan"><h2>' + tr("高手对照：先看这几个位置", "Reference comparison: start here") + '</h2><p>' + tr(
+        "本段慢多少，帮你定位差距。练习是否有效，再看出弯速度和到下一次制动前的合计时间。",
+        "Local time differences locate the loss. Evaluate practice using exit speed and total time to the next braking event.") + '</p>']
+    md = ['## ' + tr("高手对照：先看这几个位置", "Reference comparison: start here"), '']
+
+    def table(items):
+        rows = ['<table><tr><th>'+tr('位置','Location')+'</th><th>'+tr('本段慢了','Local difference')+'</th><th>'+tr('怎么安排','Plan')+'</th></tr>']
+        for w in items:
+            p = w['passages'][0]
+            decision = decisions.get(w['id'])
+            state = decision['reason'] if decision else tr('留作后续分析','Review later')
+            rows.append(f'<tr><td><a href="#{w["id"]}">S{w["sector"]:02}</a></td><td>{p["core_difference_s"]:+.2f} '+tr('秒','s')+'</td><td>'+html.escape(state)+'</td></tr>')
+        rows.append('</table>')
+        return ''.join(rows)
+
+    pieces.append(table(focus))
+    for w in focus:
         p = w['passages'][0]
-        state = tr("已选，见练习/验证计划", "Selected; see practice/validation plan") if w['id'] in selected else tr("待评估；未据此自动排除", "Pending review; not automatically excluded")
-        if w['id'] in decisions:
-            decision = decisions[w['id']]
-            labels = {"practice": tr("练习", "Practice"), "validate": tr("验证", "Validate"), "defer": tr("暂缓", "Defer")}
-            state = labels[decision['status']] + ': ' + decision['reason']
-        low = w['baseline_core_min_speed_kmh']
-        ref_low = p['core_min_speed_kmh']
-        pieces.append(f'<tr><td><a href="#{w["id"]}">S{w["sector"]:02}</a></td><td>{p["core_difference_s"]:+.3f} / {p["linked_difference_s"]:+.3f} s</td><td>{low:.1f} / {ref_low:.1f}</td><td>{w["positive_passages"]}/{len(w["passages"])}</td><td>{html.escape(state)}</td></tr>')
-        md.append(f'- S{w["sector"]:02}: '+tr('目标段 ', 'Core ')+f'{p["core_difference_s"]:+.3f} '+tr('秒；关联窗口 ', 's; linked ')+f'{p["linked_difference_s"]:+.3f} '+tr('秒；', 's; ')+state)
-    pieces.append('</table><p>'+tr('橙色：你；蓝色：参考；浅黄：目标计时段，前后为关联窗口。',
-                                  'Orange: you; blue: reference; yellow: core timing window, with linked context.')+'</p>')
-    pieces.append('<p>' + tr("排名较前的高速区域也必须评估；暂缓练习需给出具体理由。点击任一位置查看地图及对照。", "Review high-speed areas near the top too; deferral requires a reason. Open any location for maps and traces.") + '</p>')
-    for rank, w in enumerate(ranked):
+        state = decisions.get(w['id'], {}).get('reason', tr('后续分析','Review later'))
+        md.append(f'- S{w["sector"]:02}: '+tr('本段慢 ', 'Local difference ')+f'{p["core_difference_s"]:.2f} '+tr('秒。','s. ')+state)
+    pieces.append('<p>'+tr('橙色：你；蓝色：参考；浅黄：本段。','Orange: you; blue: reference; yellow: target segment.')+'</p>')
+    detail_order = focus + other
+    for rank, w in enumerate(detail_order):
+        if other and rank == len(focus):
+            pieces.append('<details class="external-other"><summary>'+tr(f'查看其余{len(other)}段',f'Other {len(other)} windows')+'</summary>'+table(other))
         p = w['passages'][0]
         title = f'S{w["sector"]:02} · ' + tr(f'高手参考{p["reference"]+1}第{p["lap"]}圈', f'Reference {p["reference"]+1}, lap {p["lap"]}')
-        pieces.append(f'<details id="{w["id"]}"'+(' open' if rank < 3 or w['id'] in selected else '')+'><summary>'+title+'</summary>')
+        pieces.append(f'<details id="{w["id"]}"'+(' open' if w['id'] in focus_keys else '')+'><summary>'+title+'</summary>')
         zone = {"letter": f'S{w["sector"]:02}', "lo": w["start_progress"], "hi": w["end_progress"], "color": "#126d82"}
         pieces.append(_map(evidence, [zone], zh))
         xy = np.asarray(w['route_xy'])
@@ -90,6 +94,9 @@ def render_external_scan(scan, coaching, evidence, zh):
                 pts=' '.join(f'{20+i/(len(vals)-1)*860:.1f},{170-(v-lo)/scale*140:.1f}' for i,v in enumerate(vals))
                 pieces.append('<polyline fill="none" stroke="'+color+'" stroke-width="2" points="'+pts+'"/>')
             pieces.append(f'<text x="20" y="15">{lo:.2f}–{lo+scale:.2f}</text></svg>')
+        pieces.append('<details><summary>'+tr('查看样本与计算','Samples and calculations')+'</summary><p>'+tr(
+            f'参考车手{len(w["passages"])}次通过中，{w["positive_passages"]}次比你的基线快。前后路段合计差{p["linked_difference_s"]:+.3f}秒。',
+            f'{w["positive_passages"]} of {len(w["passages"])} reference passages were faster. Linked difference {p["linked_difference_s"]:+.3f} s.')+'</p>')
         pieces.append('<table><tr><th>'+tr('同步位置','Shared marker')+'</th><th>'+tr('速度：你/参考','Speed: you/reference')+'</th><th>'+tr('刹车 kPa','Brake kPa')+'</th><th>'+tr('转向 度','Steering deg')+'</th><th>'+tr('总G','Combined G')+'</th></tr>')
         for index, marker in enumerate(p['markers'], 1):
             cells = [str(index)]
@@ -97,7 +104,9 @@ def render_external_scan(scan, coaching, evidence, zh):
                 pair = [marker[who].get(channel) for who in ('driver', 'reference')]
                 cells.append(' / '.join(f'{v:.2f}' if v is not None else '—' for v in pair))
             pieces.append('<tr>'+''.join('<td>'+value+'</td>' for value in cells)+'</tr>')
-        pieces.append('</table>')
+        pieces.append('</table></details>')
+        pieces.append('</details>')
+    if other:
         pieces.append('</details>')
     pieces.append('</section>')
     return ''.join(pieces), md

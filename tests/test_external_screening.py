@@ -52,7 +52,10 @@ def test_external_roles_do_not_replace_driver_pb_and_render_first(tmp_path):
     doc = (tmp_path/'report.html').read_text(encoding='utf-8')
     assert doc.index('id="external-scan"') < doc.index('id="track"')
     assert 'S20' in doc and oid in doc
-    assert '待评估' in doc
+    assert '查看其余19段' in doc
+    assert '目标段差/关联窗口差' not in doc
+    assert '重复支持' not in doc
+    assert '<details class="external-other" open' not in doc
 
 
 def test_finalize_rejects_unreviewed_external_leaders(tmp_path):
