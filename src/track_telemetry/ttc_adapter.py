@@ -137,6 +137,22 @@ def load_telemetry(path: str | Path) -> TelemetrySession:
         "sampling_note": "Source file/export sampling; original device acquisition rate is unverified",
         "parser_diagnostics": diagnostics.getvalue().splitlines(),
     })
+    if suffix in {".xrk", ".xrz"}:
+        raw_provenance = metadata.get("channel_provenance", {})
+        detailed = {}
+        for raw, name in _channel_map(mc).items():
+            record = raw_provenance.get(raw)
+            if record and name in normalized:
+                detailed[name] = dict(record)
+                source_type = record.get("source_type")
+                metadata["channel_sources"][name] = (
+                    "can" if source_type == 9 else
+                    "imu" if source_type == 1 and name in {"lat_g", "long_g", "yaw_rate_dps"}
+                    else "unknown")
+        metadata["normalized_channel_provenance"] = detailed
+        metadata["control_semantics"] = {
+            name: record.get("power_semantics", "unverified")
+            for name, record in detailed.items() if name in {"throttle_pct", "accelerator_pct"}}
     # A CSV name alone is not proof of CAN/IMU origin. Preserve TTC's explicit
     # derived-yaw label, but do not upgrade unknown source to independent yaw.
     laps = [Lap(int(raw["lap_num"]), str(raw.get("lap_label", raw["lap_num"])),

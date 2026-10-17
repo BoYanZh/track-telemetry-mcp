@@ -127,3 +127,33 @@ def test_invalid_text_fails_without_protocol_output(tmp_path, capsys):
     with pytest.raises(ValueError, match="no supported"):
         load_telemetry(path)
     assert capsys.readouterr().out == ""
+
+
+def test_aim_adapter_keeps_recorded_source_and_unknown_power_semantics(tmp_path, monkeypatch):
+    import sys
+    import types
+
+    from track_telemetry_converter.log import DataLog
+
+    def parse(log, source):
+        for raw, unit in [("CG Accel Longitudinal", "G"), ("Throttle Pos", "%")]:
+            log.channels[raw] = ChannelSeries(raw, unit, np.array([3., 3.02, 3.04]),
+                                              np.array([0., .1, .2]))
+        log.metadata["channel_provenance"] = {
+            "CG Accel Longitudinal": {"raw_name": "IMU_LongG", "source_type": 9,
+                                      "series_sample_rate_hz": 50.,
+                                      "native_acquisition_rate_hz": None},
+            "Throttle Pos": {"raw_name": "PPS", "source_type": 9,
+                             "power_semantics": "unverified"}}
+        log.laps_info = {"laps": []}
+
+    monkeypatch.setitem(sys.modules, "libxrk", types.ModuleType("libxrk"))
+    monkeypatch.setattr(DataLog, "from_xrk_log", parse)
+    path = tmp_path / "source.xrk"
+    path.write_bytes(b"synthetic")
+    session = load_telemetry(path)
+    assert session.metadata["channel_sources"]["long_g"] == "can"
+    record = session.metadata["normalized_channel_provenance"]["long_g"]
+    assert record["raw_name"] == "IMU_LongG"
+    assert record["native_acquisition_rate_hz"] is None
+    assert session.metadata["control_semantics"]["throttle_pct"] == "unverified"
