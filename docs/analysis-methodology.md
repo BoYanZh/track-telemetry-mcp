@@ -146,7 +146,11 @@ Fast-area review flags also require a selection/deferral reason, even outside th
 five largest gaps. Current descriptive trigger: target-segment minimum >=120 km/h
 and observed target difference >=0.2 s. It is a review trigger, not a risk rating.
 
-The driver-facing overview shows at most three practice focuses, with one local
-time difference each. Keep all-sector ranking, linked timing and passage counts
-in collapsed evidence. Explain repetition as how many reference passes were faster,
+The driver-facing overview opens four improvement candidates by default, showing
+one linked-window difference each. Start with agent-selected practice focuses,
+then fill with the largest linked differences while avoiding heavily overlapping
+windows. Four displayed candidates do not change the at-most-three experiment
+limit. Keep target-only differences, all-sector ranking and passage counts in
+collapsed evidence. Linked differences represent observed opportunity context,
+not an automatic guarantee that matching one isolated action recovers the sum. Explain repetition as how many reference passes were faster,
 not a confidence score. Full-route analysis does not require a full-route main table.

@@ -17,21 +17,42 @@ def render_external_scan(scan, coaching, evidence, zh):
     focus_ids = [key for key in scan.get("practice_ranking", []) if key in windows]
     if not focus_ids:
         focus_ids = [w["id"] for w in ranked if w["id"] in selected]
-    focus = [windows[key] for key in focus_ids[:3]] or ranked[:3]
+    focus = [windows[key] for key in focus_ids[:4]]
+    by_linked = sorted(ranked, key=lambda w: (w['id'] in decisions,
+                       w['passages'][0]['linked_difference_s']), reverse=True)
+    def context(w):
+        padding = 1 / max(len(windows), 1)
+        return max(0., w['start_progress']-padding), min(1., w['end_progress']+padding)
+    for candidate in by_linked:
+        if len(focus) >= 4:
+            break
+        if candidate in focus:
+            continue
+        lo, hi = context(candidate)
+        overlaps = False
+        for existing in focus:
+            a, b = context(existing)
+            if max(0., min(hi, b)-max(lo, a)) > .5 * min(hi-lo, b-a) + 1e-9:
+                overlaps = True
+        if not overlaps:
+            focus.append(candidate)
+    # Very short layouts may not contain four distinct linked areas.
+    if not focus:
+        focus = by_linked[:4]
     focus_keys = {w["id"] for w in focus}
     other = [w for w in ranked if w["id"] not in focus_keys]
     pieces = ['<section id="external-scan"><h2>' + tr("高手对照：先看这几个位置", "Reference comparison: start here") + '</h2><p>' + tr(
-        "本段慢多少，帮你定位差距。练习是否有效，再看出弯速度和到下一次制动前的合计时间。",
-        "Local time differences locate the loss. Evaluate practice using exit speed and total time to the next braking event.") + '</p>']
+        "先看四个改进候选。时间差包含前弯、本段和后续加速，作为把整套动作做好后的改善空间参考；重叠区间不相加。",
+        "Start with four improvement candidates. Linked differences cover entry, target and downstream acceleration; they guide opportunity assessment. Overlapping differences are not additive.") + '</p>']
     md = ['## ' + tr("高手对照：先看这几个位置", "Reference comparison: start here"), '']
 
     def table(items):
-        rows = ['<table><tr><th>'+tr('位置','Location')+'</th><th>'+tr('本段慢了','Local difference')+'</th><th>'+tr('怎么安排','Plan')+'</th></tr>']
+        rows = ['<table><tr><th>'+tr('位置','Location')+'</th><th>'+tr('关联窗口差','Linked-window difference')+'</th><th>'+tr('怎么安排','Plan')+'</th></tr>']
         for w in items:
             p = w['passages'][0]
             decision = decisions.get(w['id'])
             state = decision['reason'] if decision else tr('留作后续分析','Review later')
-            rows.append(f'<tr><td><a href="#{w["id"]}">S{w["sector"]:02}</a></td><td>{p["core_difference_s"]:+.2f} '+tr('秒','s')+'</td><td>'+html.escape(state)+'</td></tr>')
+            rows.append(f'<tr><td><a href="#{w["id"]}">S{w["sector"]:02}</a></td><td>{p["linked_difference_s"]:+.2f} '+tr('秒','s')+'</td><td>'+html.escape(state)+'</td></tr>')
         rows.append('</table>')
         return ''.join(rows)
 
