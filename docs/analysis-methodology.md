@@ -162,3 +162,8 @@ onset after the target in either passage; retain an explicit screening-boundary
 fallback if absent. Do not include a subsequent braking zone in the claimed exit
 benefit. A linked gap can span multiple actions and is not recoverable by fixing
 one brake application. Keep this explanation beside the location, not only in JSON.
+
+Each external decision also requires `cue`: one short driver-facing sentence
+stating what to do or test next session. Render cue in the overview; keep the
+selection/deferral reason in collapsed priority notes. Ranking mechanics and
+overlap warnings are not practice instructions.

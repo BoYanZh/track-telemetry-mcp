@@ -176,3 +176,8 @@ validation focuses. Order decisions to express practice priority. Use the regula
 hypotheses, sections, experiments or validation_plan for causal interpretation
 and next-session instructions. Decisions are persisted in evidence; the finalizer
 rejects missing coverage rather than silently hiding major fast-section gaps.
+
+Each external decision also requires `cue`: one short driver-facing sentence
+stating what to do or test next session. Render cue in the overview; keep the
+selection/deferral reason in collapsed priority notes. Ranking mechanics and
+overlap warnings are not practice instructions.

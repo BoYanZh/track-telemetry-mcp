@@ -47,11 +47,11 @@ def render_external_scan(scan, coaching, evidence, zh):
     md = ['## ' + tr("高手对照：先看这几个位置", "Reference comparison: start here"), '']
 
     def table(items):
-        rows = ['<table><tr><th>'+tr('位置','Location')+'</th><th>'+tr('关联窗口差','Linked-window difference')+'</th><th>'+tr('怎么安排','Plan')+'</th></tr>']
+        rows = ['<table><tr><th>'+tr('位置','Location')+'</th><th>'+tr('关联窗口差','Linked-window difference')+'</th><th>'+tr('下节怎么练','Next-session cue')+'</th></tr>']
         for w in items:
             p = w['passages'][0]
             decision = decisions.get(w['id'])
-            state = decision['reason'] if decision else tr('留作后续分析','Review later')
+            state = (decision.get('cue') if decision else None) or descriptions.get(w['id'], {}).get('cue') or '—'
             rows.append(f'<tr><td><a href="#{w["id"]}">S{w["sector"]:02}</a></td><td>{p["linked_difference_s"]:+.2f} '+tr('秒','s')+'</td><td>'+html.escape(state)+'</td></tr>')
         rows.append('</table>')
         return ''.join(rows)
@@ -59,7 +59,7 @@ def render_external_scan(scan, coaching, evidence, zh):
     pieces.append(table(focus))
     for w in focus:
         p = w['passages'][0]
-        state = decisions.get(w['id'], {}).get('reason', tr('后续分析','Review later'))
+        state = decisions.get(w['id'], {}).get('cue') or descriptions.get(w['id'], {}).get('cue') or '—'
         md.append(f'- S{w["sector"]:02}: '+tr('本段慢 ', 'Local difference ')+f'{p["core_difference_s"]:.2f} '+tr('秒。','s. ')+state)
     pieces.append('<p>'+tr('橙色：你；蓝色：参考；浅黄：本段。','Orange: you; blue: reference; yellow: target segment.')+'</p>')
     detail_order = focus + other
@@ -138,6 +138,8 @@ def render_external_scan(scan, coaching, evidence, zh):
                 pts=' '.join(f'{20+(display_grid[i]-display_grid[0])/(display_grid[-1]-display_grid[0])*860:.1f},{170-(v-lo)/scale*140:.1f}' for i,v in enumerate(vals))
                 pieces.append('<polyline fill="none" stroke="'+color+'" stroke-width="2" points="'+pts+'"/>')
             pieces.append(f'<text x="20" y="15">{lo:.2f}–{lo+scale:.2f}</text></svg>')
+        if w['id'] in decisions:
+            pieces.append('<details><summary>'+tr('优先级说明','Priority rationale')+'</summary><p>'+html.escape(decisions[w['id']]['reason'])+'</p></details>')
         pieces.append('<details><summary>'+tr('查看样本与计算','Samples and calculations')+'</summary><p>'+tr(
             f'参考车手{len(w["passages"])}次通过中，{w["positive_passages"]}次比你的基线快。前后路段合计差{p["linked_difference_s"]:+.3f}秒。',
             f'{w["positive_passages"]} of {len(w["passages"])} reference passages were faster. Linked difference {p["linked_difference_s"]:+.3f} s.')+'</p>')

@@ -45,3 +45,8 @@ unified completion checklist; finish reports and a prioritized practice plan.
 
 Use the unified workflow's brake-boundary and loss-attribution requirements before
 quantifying an improvement; show them beside the diagnosed location.
+
+Each external decision also requires `cue`: one short driver-facing sentence
+stating what to do or test next session. Render cue in the overview; keep the
+selection/deferral reason in collapsed priority notes. Ranking mechanics and
+overlap warnings are not practice instructions.

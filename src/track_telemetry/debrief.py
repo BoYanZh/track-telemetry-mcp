@@ -427,9 +427,10 @@ def finalize_debrief(evidence_path: Path, coaching: dict):
         if not isinstance(decisions, list) or any(not isinstance(d, dict) or
                 d.get("observation_id") not in external_ids or
                 d.get("status") not in {"practice", "validate", "defer"} or
-                not isinstance(d.get("reason"), str) or not d["reason"].strip()
+                not isinstance(d.get("reason"), str) or not d["reason"].strip() or
+                not isinstance(d.get("cue"), str) or not d["cue"].strip()
                 for d in decisions):
-            raise ValueError("external_decisions need observation_id, status (practice/validate/defer), reason")
+            raise ValueError("external_decisions need observation_id, status (practice/validate/defer), reason and driver-facing cue")
         decided = [d["observation_id"] for d in decisions]
         if len(decided) != len(set(decided)):
             raise ValueError("Duplicate external decision")

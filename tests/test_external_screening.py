@@ -46,7 +46,7 @@ def test_external_roles_do_not_replace_driver_pb_and_render_first(tmp_path):
                         'confidence': 'low', 'confounders': ['车辆配置未确认']}],
         'sections': [{'observation_id': oid, 'interpretation': '先测入口状态', 'cue': '记录三次'}],
         'external_decisions': [{'observation_id': key, 'status': 'validate' if key == oid else 'defer',
-                                'reason': '先验证入口状态，其余区域留待下一节'}
+                                'reason': '先验证入口状态，其余区域留待下一节', 'cue': '固定入口参照，记录三次出口速度。'}
                                for key in e['external_reference_scan']['observed_difference_ranking'][:5]],
         'experiments': [], 'validation_plan': '检查该窗口的入口和出口状态。'})
     doc = (tmp_path/'report.html').read_text(encoding='utf-8')
@@ -56,6 +56,8 @@ def test_external_roles_do_not_replace_driver_pb_and_render_first(tmp_path):
     assert len(re.findall(r'<details id="external-\d+" open>', doc)) == 4
     assert '查看其余16段' in doc
     assert '关联窗口差' in doc
+    assert '下节怎么练' in doc
+    assert '固定入口参照，记录三次出口速度。' in doc
     assert '目标段差/关联窗口差' not in doc
     assert '重复支持' not in doc
     assert '<details class="external-other" open' not in doc
