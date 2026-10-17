@@ -778,6 +778,7 @@ def render_incident_player(
 def analyze_session_debrief(
     paths: list[str], output_dir: str, same_layout_confirmed: bool = False,
     plots: bool = True, lap_context: list[dict[str, Any]] | None = None,
+    reference_paths: list[str] | None = None,
 ) -> dict[str, Any]:
     """One-shot all-stint measurements, reports and hosting-agent coaching handoff.
 
@@ -792,7 +793,8 @@ def analyze_session_debrief(
         _inside_root(existing.resolve())
     result = build_debrief(sessions, destination,
                            same_layout_confirmed=same_layout_confirmed, plots=plots,
-                           lap_context=lap_context)
+                           lap_context=lap_context,
+                           reference_sessions=[_load(path) for path in (reference_paths or [])])
     evidence = result.pop("evidence")
     # Full profiles and provenance stay in the artifact, rather than filling agent context.
     result["status"] = evidence["status"]
@@ -800,6 +802,8 @@ def analyze_session_debrief(
     result["reference"] = evidence["reference"]
     if "mini_sector_analysis" in evidence:
         result["mini_sector_summary"] = evidence["mini_sector_analysis"]["combined"]
+    result["external_reference_ranking"] = evidence.get("external_reference_scan", {}).get(
+        "observed_difference_ranking", [])
     result["observations"] = evidence["observations"]
     result["session_consistency"] = [
         {"index": item["index"], "all_timed_spread": item["consistency"],

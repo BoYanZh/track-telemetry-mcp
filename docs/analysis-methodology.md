@@ -1,321 +1,147 @@
-# Telemetry Analysis Methodology
-
-This document defines the default review process for driver telemetry in this repository.
-
-For full debriefs, start with `analyze_session_debrief` and follow
-[the report completion contract](session-debrief.md). Interpret the resulting
-evidence and finish both reports with at most three testable experiments.
-Plots alone do not satisfy a complete coaching request.
-
-The goal is not to inspect every channel. The goal is to find the largest credible time loss, explain it with the smallest useful set of measurements, and turn it into a small number of testable driving changes.
-
-## Review loop
-
-```text
-Validate data
-  -> Select reference
-  -> Locate time loss
-  -> Classify the loss
-  -> Diagnose inputs and vehicle response
-  -> Cross-check context
-  -> Prioritize by gain / repeatability / confidence / risk
-  -> Prescribe <= 3 changes
-  -> Re-test next session
-```
-
-This is a closed loop. Every recommendation should become a hypothesis that can be checked in the next session.
-
-## 1. Validate the data
-
-Before interpreting technique, confirm that the evidence is usable.
-
-Check:
-
-- session and layout identity;
-- timed-lap validity;
-- channel availability and sample rates;
-- missing, frozen, sparse, or obviously invalid channels;
-- source semantics, especially throttle body vs accelerator pedal;
-- yaw-rate source before any sideslip analysis;
-- whether the lap contains traffic, cooldown behavior, a yellow flag, an off-track, or another confounder.
-
-MCP mapping:
-
-```text
-list_sessions
-  -> prepare_session
-  -> inspect_session when detailed channel/sample-rate context matters
-```
-
-Do not silently turn missing or low-quality data into a measurement.
-
-## 2. Select the reference
-
-Choose the strongest reference that answers the question while minimizing confounders.
-
-A useful preference order is:
-
-1. faster driver, same car, same physical layout, comparable conditions;
-2. the driver's own clean best lap;
-3. a representative good lap from the same session;
-4. an external onboard/video reference with approximate extracted telemetry.
-
-A personal-best lap is not automatically the best technique reference. It may contain one unusually strong sector and several mediocre ones.
-
-For normalized-distance comparison, independently confirm that both laps use the same physical layout before calling `compare_laps`.
-
-## 3. Locate time loss first
-
-Start with **where time is lost**, not with a favorite channel or technique theory.
-
-Use lap delta, mini-sectors, speed traces, and section timing to identify the few areas that matter most.
-
-Typical sequence:
-
-```text
-whole-lap comparison
-  -> top time-loss sectors
-  -> one or two candidate corners/sections
-  -> detailed section analysis
-```
-
-MCP mapping:
-
-- `compare_laps` for same-layout mini-sector comparison;
-- `analyze_lap` for broad lap-level context;
-- `analyze_section` after the important section has been identified.
-
-Do not scan every specialized tool before finding the important loss areas.
-
-### Visualize the location of loss
-
-For meaningful same-layout lap comparisons, use render_lap_comparison to
-create GPS trajectory, V-S on the same physical reference distance, and
-cumulative signed Delta T. Use P2 G, inputs or health figures only when
-relevant to a specific question. Inspect sample rate, alignment confidence
-and skipped plot metadata before interpreting curves. A figure is not
-causal proof and interpolation is not a new sensor measurement.
-
-## 4. Treat consistency as a first-class metric
-
-Do not optimize only for one hero lap.
-
-Compare:
-
-- PB vs representative good lap;
-- best sectors vs repeatable sectors;
-- repeated entry/minimum/exit behavior;
-- braking and control timing variance;
-- whether the faster technique is repeatable without large corrections or excursions.
-
-A slower but repeatable pattern can be a better training baseline than an isolated fast event.
-
-When the evidence suggests inconsistent execution, classify the primary problem as **consistency / execution variance** rather than forcing it into a corner-speed or braking category.
-
-## 5. Classify the loss
-
-For each important section, identify the primary diagnosis before prescribing a fix.
-
-Use this taxonomy:
-
-1. conservative entry / braking too early;
-2. long or weak braking;
-3. excessive minimum-speed loss / overslow;
-4. power control reapplied too late;
-5. weak exit speed;
-6. line / placement / geometry problem;
-7. consistency / execution variance;
-8. already good enough / poor risk-reward to chase.
-
-Do not collapse these into generic advice such as "carry more speed."
-
-## 6. Diagnose inputs and vehicle response
-
-Once the important section and loss type are known, inspect the minimum evidence needed to explain it.
-
-A useful order is:
-
-Before classifying a sector deficit as an opportunity, compare the donor with the
-best actual lap over the preceding, target and following sectors. A quicker target
-can merely move braking or speed loss across a boundary. `corner_passages.timing_check`
-reports both signed differences; a negative context difference means the best
-whole lap was quicker over that larger window. This is a screening window, not
-proof of a complete corner or a physically achievable stitched lap.
-
-For a completed debrief, explain every recorded control category in the priority
-locations. Use `input_analysis` for threshold-defined brake events, recorded pedal
-and steering values, and source/native-rate metadata. Distinguish context extrema
-from target-sector extrema. Compare events at matched physical positions; do not
-compare delays from different minima as if they shared an apex. A pressure peak
-alone is not braking quality, steering angle alone is not understeer, and earlier
-full pedal may be compensation for previous speed loss. Each diagnosis must state
-which evidence supports it, what contradicts it, and what observation would change
-it. Put unavailable data in the conclusion rather than inventing it.
-
-### Braking
-
-```text
-lift
--> brake onset
--> pressure/pedal build
--> raw and sustained deceleration
--> release timing
--> overlap with steering
-```
-
-Use `analyze_braking` when braking behavior is the question.
-
-Do not infer ABS activation from brake pressure alone.
-
-### Entry and mid-corner
-
-```text
-turn-in
--> brake release / trail-brake overlap
--> speed decay
--> minimum speed
--> steering demand
--> yaw / lateral response when relevant
-```
-
-Use `analyze_section` for entry/minimum/exit behavior.
-
-Use `analyze_slip_angle` only when rotation/sliding matters and the session has yaw rate independent of GPS course.
-
-### Exit
-
-```text
-first power input
--> modulation
--> sustained/full power
--> steering unwind
--> exit speed
-```
-
-Always preserve `control_source`: accelerator-pedal percentage is not throttle-body percentage.
-
-### Incidents
-
-Use `analyze_incident` only for a known bounded incident window. Use video or driver observation for external events such as a surface change; do not infer them from telemetry alone.
-
-## 7. Cross-check context
-
-Before turning a numerical difference into a technique conclusion, ask whether another explanation is more likely.
-
-Examples:
-
-- traffic or point-by;
-- yellow flag or cooldown lap;
-- tire-pressure or temperature issue;
-- a deliberate lift for safety;
-- a curb or surface the driver was avoiding;
-- different track layout;
-- different vehicle/setup/conditions;
-- sensor dropout or source fallback.
-
-Video and driver feedback are context. They should confirm or challenge the telemetry interpretation, not be silently promoted to sensor measurements.
-
-## 8. Prioritize by gain, repeatability, confidence, and risk
-
-Do not rank opportunities by theoretical lap time alone.
-
-A useful qualitative model is:
-
-```text
-priority ~ expected time gain
-           x repeatability benefit
-           x evidence confidence
-           / execution risk
-```
-
-This does not need to be a literal numeric score. It is a reasoning framework.
-
-Prefer:
-
-- large, repeated losses;
-- changes supported by multiple measurements;
-- improvements that make the car easier to place and repeat;
-- lower-risk opportunities before high-speed limit chasing.
-
-For high-speed sections, a faster reference is evidence, not an instruction to reproduce the same slip or correction.
-
-## 9. Prescribe at most three changes
-
-A useful recommendation should be small enough to execute on track.
-
-Each change should contain:
-
-- **cue** — what the driver should do or notice;
-- **metric** — what telemetry should move if the hypothesis is correct;
-- **success condition** — what better execution looks like;
-- **abort condition** — what indicates the change should not be pushed further.
-
-Before selecting a change, compare line/turn timing, brake strategy, and entry or
-exit state as competing explanations. Similar peak G does not establish an equal
-path radius: speed, G direction, location and duration all matter. Larger brake
-pressure may be responding to a tighter path. A local GPS circle fit is only an
-approximation; test sensitivity to spatial span and repeated passages, and keep
-GPS drift and missing track edges explicit. Do not turn a peak metric into an
-instruction to alter release. When geometry or causation remains unresolved,
-write a concrete validation plan instead of forcing a driving correction.
-
-
-Limit a normal debrief to the highest-value one to three changes.
-
-## 10. Re-test next session
-
-Every recommendation should create a measurable next-session experiment.
-
-Use:
-
-```text
-hypothesis
-  -> driving change
-  -> measurable target
-  -> repeated clean attempts
-  -> telemetry validation
-  -> keep / revise / discard
-```
-
-Compare the new result against both the prior PB and a representative baseline. Improvement means more than a single faster lap: look for repeatability, cleaner control, and the expected metric change.
-
-## Recommended output
-
-Start with the main conclusion, then the evidence.
-
-A useful section table is:
-
-| Section | Time loss | Entry | Minimum | Exit | Primary diagnosis | Confidence | Risk/ROI |
-|---|---:|---:|---:|---:|---|---|---|
-
-Then report:
-
-1. the highest-value opportunities;
-2. what not to chase yet;
-3. at most three next-session experiments, each with cue / metric / success / abort.
-
-## Relationship to the MCP
-
-The MCP provides deterministic measurements. The methodology decides **which measurement to request next**.
-
-```text
-Methodology: where is the important loss and what evidence would resolve it?
-      |
-      v
-MCP tools: calculate the requested evidence
-      |
-      v
-Agent: interpret, prioritize, prescribe, and define the next test
-```
-
-The default agent flow remains:
-
-```text
-list_sessions
-  -> prepare_session
-  -> locate the important loss
-  -> smallest relevant analysis tool set
-  -> interpretation and next-session experiment
-```
-
-For repository-level constraints see [`../AGENTS.md`](../AGENTS.md). For detailed source semantics and task-specific analysis policy see [`../skill/SKILL.md`](../skill/SKILL.md).
+# Coaching analysis workflow
+
+This is the authoritative analysis sequence for session and reference-driver
+coaching. Task prompts select a scenario; `skill/SKILL.md` owns channel semantics,
+capability gates and the diagnosis taxonomy. `session-debrief.md` owns tool calls,
+artifact schemas and finalization. Python measures; the hosting agent interprets.
+
+## 1. Validate data and comparison scope
+
+Start complete reviews with `analyze_session_debrief` and all supplied files/stints.
+For focused questions, prepare the session and request only relevant tools.
+Record lap identity, units, source, quality, normalized/export clock and verified
+native acquisition rate separately. Missing data stays unavailable.
+Independently confirm identical physical layouts before enabling full comparisons.
+Without confirmation, limit work to independently established shared physical
+sections; a successful GPS fit or track name alone does not establish layout.
+Label timed laps, candidate-push laps and external annotations separately. Pace
+screening proves neither intent nor clean running. Inspect interruptions before
+attributing a difference to technique.
+
+Exit: usable evidence, explicit comparison scope and unavailable channels.
+
+## 2. Screen opportunities before choosing a lap pair
+
+Read `opportunity_screening`, the all-lap physical mini-sector matrix and real
+contiguous intervals. Include valid local sections from otherwise slower laps.
+Review every sector, including sector 1 and the finish/start area, even when the
+PB owns its fastest sample. Review source-switch states and keep per-session and
+combined results separate. Virtual best is an opportunity index, not a continuous
+trajectory. Finish/start joins require adjacent recorded laps; adding the end and
+start of one row does not create a continuous passage. Overlapping intervals are alternatives; their differences never sum.
+
+Use the driver's best actual lap and repeated good passages as the baseline.
+An external reference adds an independent whole-route screening pass; supply it
+through MCP `reference_paths` or CLI `--reference`, separately from driver files.
+It does not replace the driver's own repeatability review. `external_reference_scan`
+visits every baseline sector and matches local passages before own-lap shortlisting.
+A consistently slow fast corner must remain visible even with zero own-lap variance.
+The observed-difference ranking is distinct from the agent's practice ranking.
+Finalization requires `external_decisions` for the five largest external differences:
+`observation_id`, `status` (practice/validate/defer), and a concrete `reason`.
+At most three may be practice/validation focuses. Explain large fast-section
+deferrals rather than suppressing them during measurement. Stable S01–S20 IDs
+refer to the baseline's physical sectors, never official corner names. Select a few linked corners for deeper measurement,
+not simply the three largest single-sector gaps.
+
+Exit: candidate locations, source laps, repeated support and exclusions.
+
+## 3. Measure the complete linked window
+
+Trace the preceding corner through the target into subsequent acceleration and
+the next braking event. Use shared physical boundaries for both passages.
+Inspect `corner_passages.chain_window` and `timing_check`; report missing or
+mismatched anchors and lap truncation. Retract a donor advantage that disappears
+across the linked window. A full-pedal straight may inherit its loss upstream.
+
+Python must calculate the following evidence, using existing tools where available:
+
+| Measurement | Required distinction |
+|---|---|
+| Entry state | Speed already carried into the window vs newly accumulated time |
+| Stage timing | Upstream, target and downstream differences with consistent sign |
+| Shared markers | Position, source time, speed, brake, steering, power and G when available |
+| Events | Onset/release, minimum-speed position, steering build/unwind and power progression |
+| Repetition | Individual supporting laps, measurements, exclusions and alignment quality |
+
+Window extrema describe a window; they are not simultaneous events. Compare
+values at the same physical marker before combining them in an explanation.
+Different minimum-speed positions are not a shared apex. An approximate GPS
+circle fit needs spatial-span sensitivity and repeated-pass checks before use.
+If the workflow did not calculate needed evidence, obtain a targeted deterministic
+measurement and persist it with source/units/method; do not estimate it by eye.
+These requirements are an agent contract, not a claim every field is already
+produced automatically by the current backend.
+
+Exit: traceable measurements sufficient to test a causal explanation, or the
+specific missing measurement needed for a validation task.
+
+## 4. Compare explanations before prescribing
+
+Read traces in this order: cumulative Delta-T, speed vs physical distance,
+braking against steering, power progression, then G and GPS response.
+Separate three layers:
+
+- Observation: where time accumulates, speed changes and recorded actions.
+- Hypothesis: line/placement, braking, steering timing, power or entry-state explanation.
+- Test: one behavior or one unresolved hypothesis to check next session.
+
+Classify with the canonical taxonomy in `skill/SKILL.md`. Lower minimum speed
+alone is not proven overslow. Overslow describes unnecessary speed loss; route
+and control timing may explain why it occurs. Higher brake pressure can respond
+to a tighter path. Steering peak alone does not establish understeer or line.
+G is vehicle response, not a separate fault or an available-grip target. Compare
+its spatial timing with speed, steering and route, after checking axes and source.
+When longitudinal G is absent, combined G stays unavailable.
+
+For each hypothesis retain supporting and contradictory observations, confidence,
+confounders and a falsifying measurement in JSON. Check traffic, deliberate lifts,
+vehicle/setup and conditions as alternatives. Do not infer intent from a trace.
+
+Exit: a supported diagnosis or a bounded validation question, not a generic cue.
+
+## 5. Select the next-session focus
+
+Rank qualitatively by retained linked-window difference, repeated support,
+evidence clarity, downstream influence, workload and consequence of error.
+Fast corners onto long acceleration deserve review; speed alone is not priority.
+Prefer one focus; select at most three experiments. Distinguish improving PB from
+reproducing pace already recorded. For each specify location, one changed behavior,
+what stays fixed, baseline, success over the linked window, abort and re-test.
+If a correction is unsupported, use zero experiments and a concrete nonempty
+`validation_plan`: name the position/event to check and how the result changes
+the next decision. Do not fill uncertainty with generic brake-release advice.
+
+Exit: a small executable practice plan, not a list of theoretical gains.
+
+## 6. Render, inspect and finish
+
+Every discussed area, including deferred areas, gets a recognizable description,
+a full-track locator, equal-scale local route, direction and shared markers.
+Use the user's language. Show speed, one semantically matched power trace, one
+brake trace, steering and combined planar G when supported. Omit ambiguous
+cross-source overlays; retain provenance and unavailable reasons in evidence.
+Use relevant P1/P2 renderers; inspect actual figures, not only file existence.
+
+Write short findings beside the plots: diagnosis, evidence, cause, response and
+next action. Put generic measurement caveats once in collapsed notes. Keep local
+uncertainty visible only when it changes the practice decision.
+A short practice card uses the same analysis, with one or two focuses and a link
+to the full evidence; it is not a cheaper diagnostic method or a CLI mode claim.
+
+Before `finalize_session_debrief`, check:
+
+- Each diagnosis cites measured observations; each illustrated location is findable.
+- Same-position claims use synchronized values, not unrelated peaks.
+- Stage differences conserve the linked total; repeated support is stored by lap.
+- Units, pedal/body semantics and sample-rate provenance remain correct.
+- Each recommendation has one action/test and a measurable next-session outcome.
+- Both reports, evidence and practice plan are finished; charts alone are incomplete.
+
+Stop when the driver can identify where, what to test and how to evaluate it in
+30 seconds. Reopen with new telemetry, video or driver feedback. For checked
+first-party rationale see [telemetry-review-sources.md](telemetry-review-sources.md).
+
+Fast-area review flags also require a selection/deferral reason, even outside the
+five largest gaps. Current descriptive trigger: target-segment minimum >=120 km/h
+and observed target difference >=0.2 s. It is a review trigger, not a risk rating.

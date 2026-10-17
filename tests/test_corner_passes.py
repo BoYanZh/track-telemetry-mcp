@@ -45,9 +45,9 @@ def test_all_passages_and_unverified_g_are_preserved(tmp_path):
     from track_telemetry.corner_report import render_corner
 
     corner = render_corner(observations[0], lambda i, lap: f"{i}:{lap}", True)
-    assert corner.count('<figure><h3>') == 4
-    assert "速度 · 公里/小时" not in corner
-    assert "刹车 · 压力 bar" in corner
+    assert corner.count('<figure><h3>') == 5
+    assert "速度 · 公里/小时" in corner
+    assert "刹车 · 压力 千帕" in corner
     for o in observations:
         context = o["corner_passages"]
         timing = context["timing_check"]

@@ -1,66 +1,44 @@
-# Reference Driver Comparison
+# Reference driver comparison
 
-Compare the driver's telemetry against an external reference driver without treating the reference as an automatic target.
+Find transferable lessons from an external driver, not a speed target to copy.
+Read and execute [the unified workflow](../docs/analysis-methodology.md), stages
+1–6. `skill/SKILL.md` owns source semantics and diagnosis categories;
+`docs/session-debrief.md` owns artifact schemas and finalization.
 
-Follow `skill/SKILL.md`. Measure with deterministic tools first. Clearly distinguish raw telemetry from pseudo telemetry reconstructed from video overlays.
+## Independent screening before practice selection
 
-## Workflow
+Supply reference files via `reference_paths` / `--reference`, separately from
+own files. Read every window in `external_reference_scan`; do not restrict the
+expert to the driver's own top sectors. Report two rankings: observed external
+time differences and next-session practice priorities. Review all large fast
+corner differences even when the driver's own laps are uniformly slow there.
+Provide external_decisions for the five largest external gaps, with an explicit
+practice/validate/defer reason per window, before finalization. Choose at most
+three practice/validation focuses. Use stable physical S IDs; list unmatched
+areas rather than calling the coverage complete.
 
-1. Verify layout compatibility.
-   - If the physical layout is identical, same-layout normalized-distance comparison is allowed.
-   - If layouts differ, compare only shared physical sections aligned by GPS/onboard context.
-   - Never compare whole-lap percentages across different layouts.
+## Reference-specific choices
 
-2. Establish data quality for both sides.
-   - Raw RCZ/CAN/GPS telemetry has higher confidence than video-derived pseudo telemetry.
-   - For video-derived reference data, report extraction/calibration limitations.
-   - Do not invent missing throttle, brake, steering, or line data.
+- Retain the driver's own PB and repeatable passages as the training baseline.
+  Compare the external driver's repeated good passages, not just one fastest lap.
+- Verify vehicle, tires, transmission, setup, conditions and source comparability
+  where evidence exists. A vehicle label is not a verified configuration.
+- Confirm physical layout independently before whole-lap comparisons. Otherwise
+  analyze only established shared physical sections; do not use whole-lap fractions
+  across incompatible layouts or treat GPS fit alone as confirmation.
+- Normalize units explicitly while preserving raw values and source clocks.
+  Compare power channels only when semantics match. Unknown channel origin stays
+  unknown; a channel label does not prove pedal/body identity or acquisition rate.
+- Video-overlay estimates remain approximate pseudo telemetry. Prefer calibrated
+  speed/position; do not equate video brake percentage to hydraulic pressure.
+- Store repeated reference-lap measurements and alignment quality individually.
+  Separate entry-state, vehicle and condition advantages from technique candidates.
+- Treat high-speed advantages as later validation when route or control causes
+  remain unresolved. Do not prescribe reference speeds or G peaks as targets.
 
-3. Compare each shared section using:
-   - entry speed
-   - minimum speed
-   - exit speed
-   - braking point/duration when supported
-   - throttle timing when supported
-   - line/map position when supported
+## Delivery
 
-4. Diagnose *why* the reference is faster.
-
-Use categories such as:
-- later braking but similar minimum speed
-- same entry but higher minimum speed
-- similar minimum speed but earlier throttle / better exit
-- lower entry with better geometry and exit
-- line/placement difference
-- reference advantage not safely actionable yet
-- insufficient evidence
-
-5. Separate opportunity from target.
-
-For each reference advantage, decide whether it is:
-- immediately actionable
-- worth testing in a small increment
-- dependent on line/technique first
-- low ROI
-- high consequence / not worth chasing yet
-
-High-speed reference speed is evidence, not an instruction to copy the number.
-
-## Output
-
-### Main differences
-
-| Section | Driver entry/min/exit | Reference entry/min/exit | What creates the gap | Confidence | Actionability |
-|---|---|---|---|---|---|
-
-### Highest-ROI reference lessons
-
-Give at most 3 concrete changes. Tie each to measured evidence.
-
-### Reference advantages not to copy yet
-
-Explicitly call out high-speed, low-confidence, setup-dependent, or line-dependent differences that should not become immediate speed targets.
-
-### Data limitations
-
-State whether the reference data came from raw telemetry or video overlay extraction, how it was aligned, and which channels are approximate or unavailable.
+For each located area state diagnosis, measured difference, competing explanation,
+G/vehicle response when available, and one next-session action or validation.
+Keep source details in JSON and generic limitations in collapsed notes. Apply the
+unified completion checklist; finish reports and a prioritized practice plan.

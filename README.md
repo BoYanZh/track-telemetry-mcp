@@ -55,6 +55,9 @@ Use only the extras you need:
 ## Run
 
 For complete coaching, give your agent this repository and telemetry attachments.
+The agent reviews every mini-sector and real adjoining intervals before selecting
+next-session corner focuses; a fastest first sector does not hide a slower exit.
+See [how the review prioritizes corners](docs/telemetry-review-sources.md).
 Ask it to follow [the one-shot workflow](docs/session-debrief.md), interpret the
 measurements and deliver both reports with at most three next-session experiments.
 
@@ -288,7 +291,7 @@ Codex / Cursor / OpenCode / ChatGPT / other MCP clients
 
 For the standard review process and detailed agent behavior:
 
-- [`docs/analysis-methodology.md`](docs/analysis-methodology.md) — validate -> locate time loss -> diagnose -> prioritize -> re-test
+- [`docs/analysis-methodology.md`](docs/analysis-methodology.md) — single authoritative workflow: validate -> screen -> measure linked windows -> compare causes -> choose practice -> verify reports
 - [`AGENTS.md`](AGENTS.md) — concise repo-level agent contract
 - [`skill/SKILL.md`](skill/SKILL.md) — full telemetry-analysis policy
 - [`prompts/`](prompts/) — task-specific coaching/debrief structures
@@ -320,3 +323,18 @@ Raw `.rcz`, MoTeC files, video, and personal telemetry should not be committed.
 ## License
 
 MIT
+
+### Comparing an external driver
+
+Keep the external driver separate from your own files:
+
+```sh
+track-telemetry-coach analyze your-session.rcz --reference expert.xrk --output debrief
+```
+
+MCP equivalent: `analyze_session_debrief(paths=[...], reference_paths=[...], ...)`.
+The backend screens all physical baseline sectors against local external passages,
+including stable deficits in fast corners. External files do not become your PB.
+The report shows **observed differences** separately from **next-session practice**;
+the hosting agent explains selection/deferral for the five largest differences.
+See [the reference contract](docs/session-debrief.md#external-reference-files-and-two-rankings).

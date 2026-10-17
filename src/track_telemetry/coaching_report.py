@@ -42,7 +42,8 @@ def _session_name(session, zh):
 
 def _zones(evidence, zh):
     points = evidence.get("reference_geometry", {}).get("points", [])
-    observations = [o for o in evidence["observations"] if "sector" in o]
+    observations = [o for o in evidence["observations"] if "sector" in o and o.get("report_included", True)]
+    observations.sort(key=lambda o: o.get("map_letter", ""))
     zones = []
     for index, observation in enumerate(observations):
         profile = observation["physical_section_profile"]
@@ -58,7 +59,7 @@ def _zones(evidence, zh):
                 vertical = "下" if y < min(ys) + np.ptp(ys) / 3 else "上" if y > min(ys) + np.ptp(ys) * 2 / 3 else ""
                 location = ("地图中央" if horizontal == "中" and not vertical else
                             f"地图{horizontal}侧" if not vertical else f"地图{horizontal}{vertical}方") if zh else "Highlighted GPS section"
-        zones.append({"letter": chr(65 + index), "location": location, "lo": lo, "hi": hi,
+        zones.append({"letter": observation.get("map_letter", chr(65 + index)), "location": location, "lo": lo, "hi": hi,
                       "observation": observation, "color": ("#ba4a20", "#126d82", "#74529a")[index % 3]})
     return zones
 
@@ -119,13 +120,19 @@ def render_report(evidence, coaching):
         return "".join(f"<p>{_escape(p)}</p>" for p in text.split("\n\n") if p.strip())
     bodies.append('<header><p class="brand">' + tr("驾驶复盘 · 下一节练习", "Debrief · next-session practice")
                   + f'</p><h1>{_escape(title)}</h1>{paragraphs(coaching["summary"])}</header>')
+    if evidence.get("external_reference_scan"):
+        from .external_report import render_external_scan
+
+        external_html, external_md = render_external_scan(evidence["external_reference_scan"], coaching, evidence, zh)
+        bodies.append(external_html)
+        md += external_md
     composite = evidence.get("mini_sector_analysis", {}).get("combined", {})
     if composite.get("virtual_best_s") is not None:
         source = composite["best_whole_lap_source"]
         name = _session_name(sessions[source["session"]], zh)
         text = tr(
-            f"实际最快 {name}第{source['lap']}圈 {_time(composite['best_whole_lap_s'])}；分段理论最佳 {_time(composite['virtual_best_s'])}；算术差 {composite['arithmetic_gap_s']:.3f} 秒。下面直接定位最值得检查的三个弯区。理论最佳来自不同圈，不能视为下一节必然能跑出的圈速。",
-            f"Best actual lap {_time(composite['best_whole_lap_s'])}; mini-sector theoretical best {_time(composite['virtual_best_s'])}; arithmetic gap {composite['arithmetic_gap_s']:.3f} s. The composite is not a guaranteed achievable lap.")
+            f"实际最快 {name}第{source['lap']}圈 {_time(composite['best_whole_lap_s'])}；分段理论最佳 {_time(composite['virtual_best_s'])}；算术差 {composite['arithmetic_gap_s']:.3f} 秒。下面看下一节最值得练的弯区。",
+            f"Best actual lap {_time(composite['best_whole_lap_s'])}; mini-sector theoretical best {_time(composite['virtual_best_s'])}; arithmetic gap {composite['arithmetic_gap_s']:.3f} s. Review the priority corners below.")
         bodies.append('<section><h2>' + tr("最快圈与分段理论最佳", "Best lap versus mini-sector theoretical best") + '</h2>' + paragraphs(text) + '</section>')
         md += ["", text, ""]
     calculation_details = ""
@@ -135,11 +142,12 @@ def render_report(evidence, coaching):
 
         mini_html, mini_md = render_mini_sectors(evidence["mini_sector_analysis"],
                                               lambda i: _session_name(sessions[i], zh), _time, zh)
-        sector_map = [{"letter": str(i), "lo": (i - 1) / 20, "hi": i / 20,
-                       "color": "#126d82" if i % 2 else "#507c8a"} for i in range(1, 21)]
+        count = evidence["mini_sector_analysis"].get("sector_count", 20)
+        sector_map = [{"letter": str(i), "lo": (i - 1) / count, "hi": i / count,
+                       "color": "#126d82" if i % 2 else "#507c8a"} for i in range(1, count + 1)]
         calculation_details = ('<details class="calculations"><summary>'
                       + tr("计算依据：逐圈区段、拼接圈时与接缝检查", "Calculation details: sector matrix and virtual lap")
-                      + '</summary><section><h2>' + tr("二十个区段在这里", "Locate the twenty mini-sectors")
+                      + '</summary><section><h2>' + tr(f"{count}个区段在这里", "Locate the mini-sectors")
                       + '</h2>' + _map(evidence, sector_map, zh)
                       + '<p class="note">' + tr("数字对应下方矩阵的列，不是官方弯号。", "Numbers match matrix columns, not official corners.") + '</p></section>' + mini_html)
         calculation_details += '</details>'
@@ -147,28 +155,37 @@ def render_report(evidence, coaching):
                   + _map(evidence, zones, zh) + '<div class="map-key">'
                   + "".join(f'<a href="#zone-{z["letter"]}" style="--zone:{z["color"]}">{z["letter"]} · {_escape(z["location"])}</a>' for z in zones)
                   + '</div><p class="note">' + tr(
-                      "A/B/C 标记计时差出现的区段；动作原因可能在上游弯道。北朝上，箭头表示行驶方向；灰线是采样轨迹，不是赛道边界。",
-                      "North up; arrows follow sample order. Highlights locate the findings. GPS lines are not track boundaries; letters are not official corner names.") + '</p></section>')
+                      "A/B/C 标记计时差出现的区段；动作原因可能在上游弯道。北朝上，箭头表示行驶方向；灰线为行驶轨迹。",
+                      "North up; arrows follow sample order. Highlights locate the findings. Grey lines show recorded routes.") + '</p></section>')
     descriptions = {item["observation_id"]: item for item in coaching.get("sections", [])}
     section_order = {key: index for index, key in enumerate(descriptions)}
-    for zone in sorted(zones, key=lambda z: section_order.get(z["observation"]["id"], len(descriptions))):
+    ranked_zones = sorted(zones, key=lambda z: section_order.get(z["observation"]["id"], len(descriptions)))
+    for zone in ranked_zones:
         o = zone["observation"]
         difference = o.get("measured_difference_s", o.get("median_loss_s"))
         composite = o.get("loss_metric") == "best_whole_lap_minus_sector_best"
         description = descriptions.get(o["id"], {})
         heading = description.get("title", zone["location"])
+        prefix = f"{zone['letter']} · "
+        show = heading[len(prefix):] if heading.startswith(prefix) else heading
+        full = o["id"] in descriptions
+        if not full:
+            bodies.append('<details><summary>' + _escape(tr(
+                f"{zone['letter']} · {zone['location']}：实测区段差约 {difference:.2f} 秒，无四信号支持，本节不立项。",
+                f"{zone['letter']} · {zone['location']}: measured difference {difference:.2f} s, no diagnosis scheduled.")) + '</summary>')
+            md += ["", f"- {zone['letter']} · {zone['location']}：实测区段差约 {difference:.2f} 秒，本节不立项。"]
         reference = o.get("section_reference", evidence["reference"])
         driver_label = _session_name(sessions[o["example_session"]], zh) + tr(f"第{o['example_lap']}圈", f" L{o['example_lap']}")
         ref_label = _session_name(sessions[reference["session"]], zh) + tr(f"第{reference['lap']}圈", f" L{reference['lap']}")
         bodies.append(f'<section class="zone" id="zone-{zone["letter"]}" style="--zone:{zone["color"]}">'
-                      f'<h2><span class="letter">{zone["letter"]}</span>{_escape(heading)}</h2>'
+                      f'<h2><span class="letter">{zone["letter"]}</span>{_escape(show)}</h2>'
                       '<div class="zone-layout"><div>' + _map(evidence, zones, zh, zone["letter"])
                       + '</div><div><p class="finding">' + tr(
-                          f"整圈最快在此仍差约 {difference:.2f} 秒" if composite else f"候选样本的中位差约 {difference:.2f} 秒",
-                          f"Best-lap section deficit: {difference:.2f} s" if composite else f"Median candidate difference: {difference:.2f} s") + '</p>'
+                          f"本段两圈实测钟差约 {difference:.2f} 秒" if composite else f"候选样本的中位差约 {difference:.2f} 秒",
+                          f"Measured two-lap difference: {difference:.2f} s" if composite else f"Median candidate difference: {difference:.2f} s") + '</p>'
                       + paragraphs(description.get("what_happened", tr(
-                          f"本段有 {o['compared_laps']} 个可用样本，其中 {o['repeat_count']} 个位于本段最快后 0.1 秒以内。曲线比较整圈最快圈与本段最快来源，不是虚拟圈可实现的证明。",
-                          f"{o['compared_laps']} eligible samples; {o['repeat_count']} within 0.1 s of sector best. This comparison does not establish feasibility of the virtual lap.")))
+                          f"本段有 {o['compared_laps']} 个可用样本，其中 {o['repeat_count']} 个位于本段最快后 0.1 秒以内。曲线比较整圈最快圈与本段最快来源。",
+                          f"{o['compared_laps']} eligible samples; {o['repeat_count']} within 0.1 s of sector best. The traces compare the best whole lap and the sector donor.")))
                       + '</div></div><figure>'
                       + '<figcaption><span class="driver">' + tr("整圈最快：" if composite else "对照：", "Best whole lap: " if composite else "Compared: ") + _escape(driver_label)
                       + '</span>　<span class="reference">' + tr("本段最快：" if composite else "参考：", "Sector best: " if composite else "Reference: ") + _escape(ref_label)
@@ -190,39 +207,43 @@ def render_report(evidence, coaching):
             confidence = {"low": tr("偏低", "low"), "moderate": tr("中等", "moderate"), "high": tr("较高", "high")}
             bodies.append('<p class="note">' + tr("原因判断的把握：", "Interpretation confidence: ")
                           + " / ".join(confidence[h["confidence"]] for h in linked) + '</p>')
-        bodies.append('<p class="note">' + tr("这些是均分区段，不一定覆盖完整弯道。区段最低速度不等于弯心速度。", "Sections may not cover a whole corner; section minima are not apex speeds.") + '</p></section>')
-        md += ["", f"## {zone['letter']} · {heading}", "", description.get("what_happened", ""),
-               tr(f"实测区段差约 {difference:.2f} 秒。", f"Measured section difference: {difference:.2f} s."),
-               description.get("interpretation", ""), description.get("cue", ""), description.get("watch_out", "")]
-        md.extend(description[key] for key in ("line_analysis", "braking_analysis", "steering_analysis", "power_analysis", "g_analysis")
-                  if description.get(key))
-        if not description.get("interpretation"):
-            md.extend(h["explanation"] for h in linked)
+        bodies.append('<p class="note">' + tr("", "") + '</p></section>'
+                      + ('</details>' if not full else ''))
+        if full:
+            md += ["", f"## {zone['letter']} · {show}", "", description.get("what_happened", ""),
+                   tr(f"实测区段差约 {difference:.2f} 秒。", f"Measured section difference: {difference:.2f} s."),
+                   description.get("interpretation", ""), description.get("cue", ""), description.get("watch_out", "")]
+            md.extend(description[key] for key in ("line_analysis", "braking_analysis", "steering_analysis", "power_analysis", "g_analysis")
+                      if description.get(key))
+            if not description.get("interpretation"):
+                md.extend(h["explanation"] for h in linked)
     bodies.append('<section><h2>' + (tr("下一节只做这些练习", "Next-session experiments") if coaching["experiments"]
                                    else tr("先验证原因", "Validate the cause first")) + '</h2>')
     md += ["", "## " + tr("下一节练习", "Next-session experiments"), ""]
     if coaching.get("validation_plan"):
         bodies.append(paragraphs(coaching["validation_plan"]))
         md += [coaching["validation_plan"], ""]
-    for index, experiment in enumerate(coaching["experiments"], 1):
+    for experiment in coaching["experiments"]:
         located = [zone_by_id[key] for key in experiment["observation_ids"] if key in zone_by_id]
-        location = " / ".join(f"{z['letter']} · {z['location']}" for z in located) if located else experiment["location"]
-        bodies.append(f'<article class="practice"><h3>{index}. {_escape(location)}</h3><dl>')
-        md += [f"### {index}. {location}", ""]
+        derived = " / ".join(f"{z['letter']} · {z['location']}" for z in located)
+        bodies.append(f'<article class="practice"><h3>{_escape(experiment["location"])}</h3>'
+                      + (f'<p class="note">{_escape(tr("对应区段：", "Linked zone: ") + derived)}</p>' if derived and derived not in experiment["location"] else '')
+                      + '<dl>')
+        md += [f"### {experiment['location']}", ""]
         for key, label in (("change", tr("只改这一项", "One change")), ("baseline", tr("当前基线", "Baseline")),
                            ("success_measure", tr("怎样判断有效", "Success measure")), ("abort_condition", tr("何时停止", "Abort condition")),
                            ("re_test", tr("下次怎样复测", "Re-test"))):
             bodies.append(f'<dt>{label}</dt><dd>{_escape(experiment[key])}</dd>')
             md.append(f"- {label}：{experiment[key]}")
         bodies.append('</dl></article>')
-    bodies.append('</section><section><h2>' + tr("哪些结论还不能下", "What remains uncertain") + '</h2><p>' + tr(
-        "交通、旗号、轮胎、天气、油量与驾驶意图没有全部确认。速度差不能直接证明技术错误，也不能把各段差异相加当作保证收益。没有视频佐证的路线或让车原因，仍需保留不确定性。",
-        "Traffic, flags, tires, weather, fuel and intent remain confounders. Differences do not establish driver causation or guaranteed gains.") + '</p>')
+    bodies.append('</section><details><summary>' + tr("数据说明", "Measurement notes") + '</summary><p>' + tr(
+        "时间差用于选练习重点，理论圈时来自不同圈的分段。GPS及圆拟合描述路线形状，总G描述车辆响应。交通、轮胎和天气等背景详见测量数据。",
+        "Time gaps guide practice priorities; the theoretical lap combines sectors from different laps. GPS fits describe route shape, and combined G describes vehicle response. Context and limitations remain in the evidence.") + '</p>')
     for hypothesis in coaching["hypotheses"]:
         if not any(key in zone_by_id for key in hypothesis["observation_ids"]):
             bodies.append(paragraphs(hypothesis["explanation"]))
             md += ["", hypothesis["explanation"]]
-    bodies.append('</section>')
+    bodies.append('</details>')
     bodies.append(calculation_details)
     if mini_md:
         md += ["", "<details>", "<summary>" + tr("计算依据", "Calculation details") + "</summary>",

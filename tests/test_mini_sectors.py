@@ -59,3 +59,26 @@ def test_boundary_speed_does_not_bridge_missing_values():
                {"progress": 1., "lap_a_speed_kmh": 120.}]
     assert _speed(profile, .5) is None
     assert _speed(profile, .75) is None
+
+
+def test_ranked_deficits_cover_sectors_outside_gross_top_three():
+    from track_telemetry.mini_sectors import _reduce
+
+    def row(lap, slow_sector):
+        sectors = [{"sector": i + 1, "duration_s": 4. if i == slow_sector else 5.,
+                    "eligible": True, "entry_speed_kmh": None, "exit_speed_kmh": None}
+                   for i in range(20)]
+        return {"session": 0, "lap": lap, "stint": 0, "whole_lap_eligible": True,
+                "lap_time_s": float(sum(s["duration_s"] for s in sectors)),
+                "sectors": sectors, "alignment_quality": {}}
+    baseline, donor = row(1, -1), row(2, 6)
+    donor["sectors"][6]["duration_s"] = 4.
+    for i in (0, 1, 2):
+        donor["sectors"][i]["duration_s"] = 6.
+    donor["lap_time_s"] = float(sum(s["duration_s"] for s in donor["sectors"]))
+    combined = _reduce([baseline, donor])
+    assert len(combined["ranked_best_lap_deficits"]) == 20
+    assert [w["sector"] for w in combined["largest_best_lap_deficits"]] == [
+        w["sector"] for w in combined["ranked_best_lap_deficits"][:3]]
+    seventh = combined["ranked_best_lap_deficits"][6]
+    assert seventh not in combined["largest_best_lap_deficits"]

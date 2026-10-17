@@ -87,7 +87,7 @@ object contains summary, hypotheses and experiments. Each hypothesis supplies
 observation_ids, explanation, confidence (low/moderate/high), and confounders.
 Each experiment supplies observation_ids, location, change, baseline,
 success_measure, abort_condition and re_test. The finalizer checks references
-and the one-to-three experiment limit before writing matching completed reports
+and the zero-to-three experiment limit (zero requires a validation_plan) before writing matching completed reports
 and updating JSON status. It validates structure, not the truth of an AI claim;
 the host remains responsible for evidence-based interpretation.
 
@@ -111,7 +111,11 @@ The full mini-sector matrix, virtual sums and source-switch audit are collapsed
 under calculation details after the coaching, so they do not bury the action plan.
 Selection details are collapsed; raw measurements and provenance remain in JSON.
 Main maps and speed figures are inline SVG, so the completed HTML can be opened
-as one file without network access or neighboring image files.
+as one file without network access or neighboring image files. Report body stays
+fully in the user's language with no mixed-language labels; locate sections by
+map letter plus a recognisable mapped position, never by a bare distance range.
+Route detail figures stay large and zoomable with control traces on the same
+physical-position axis, not hidden in collapsed details.
 
 For local real-data validation, set TRACK_TELEMETRY_REAL_RCZ to a private RCZ path
 and run pytest tests/test_debrief.py. Recordings are never added to the repository.
@@ -133,25 +137,42 @@ may disappear when adjacent sections are counted. Never compare two different
 window minima as a common apex. The report's embedded zoom controls work offline;
 all coaching text remains HTML-escaped.
 
-Default corner presentation: exactly one power-control trace (prefer accelerator pedal), one brake trace (prefer pressure), steering, and planar combined G = hypot(lat_g, long_g). Use one short finding per item; omit duplicate sensors and repeated caveats. Keep detailed channels and provenance in JSON.
+Corner presentation, linked-window diagnosis and concision rules live in
+`skill/SKILL.md` (four-signal findings, mini-sectors as loss locators with
+upstream/target/downstream timing, line-vs-timing comparison, zero-experiment
+validation plans). Follow them as written; do not keep a local copy here.
 
-Treat mini-sectors as loss locators, not causal corner boundaries. Inspect
-`corner_passages.chain_window` and split upstream/target/downstream timing.
-The provisional window follows verified brake events toward the next brake,
-using shared physical limits for both laps. Missing events fall back explicitly;
-lap boundaries truncate the chain. Non-overlapping upstream events may be different
-corners, not a matched action. Trace exit-speed deficits into downstream acceleration
-before prescribing; do not diagnose an already-full-pedal sector as late power.
-Keep the four concise signal findings, but name the upstream action to practise
-and measure the full linked window. Official corner/straight identity still needs
-external confirmation.
+## Analysis authority
 
-Concision governs presentation, not reasoning. Compare competing line/turn-timing,
-braking and exit-state explanations before prescribing. Similar G/steering peaks
-neither prove nor exclude a line problem. Higher brake pressure may be a response
-to a tighter path. Inspect local GPS shape across spatial fit spans and repeated
-passes; `local_gps_geometry` is an approximate circle model, not track edges or
-available grip. Put the resulting short line finding in `line_analysis`. Never
-fill uncertainty with a generic brake-release/consistency instruction. If no
-correction is justified, finalize zero `experiments` with a concrete nonempty
-`validation_plan`; checking a hypothesis is a valid next-session plan.
+Follow [the unified workflow](analysis-methodology.md), stages 1–6, for screening,
+synchronized linked-window evidence, cause comparison, practice selection and
+report acceptance. This document specifies tool/artifact integration; it does not
+define a second analysis sequence. Some required targeted measurements may need
+agent-driven enrichment beyond the initial workflow output.
+
+## External reference files and two rankings
+
+Pass driver files in `paths` and external driver files in `reference_paths` to
+`analyze_session_debrief`. In the CLI use repeatable `--reference FILE`:
+
+```sh
+track-telemetry-coach analyze driver.rcz --reference expert.xrk --output debrief
+```
+
+`--same-layout-confirmed` covers comparisons among the driver files. External
+files receive local physical-window matching across every driver baseline sector;
+they do not enter driver PB/consistency or establish identical whole layouts.
+Unmatched windows retain exclusions. Fast local passages from slow external laps
+remain eligible; traffic/intent and conditions remain subject to agent review.
+`external_reference_scan` records every window, individual source lap, entry/exit
+states, stage deltas, matched traces, signal availability, and alignment residuals.
+The report puts the external difference table first. It is an observed-difference
+ranking, not guaranteed improvement or an automatic risk-based practice ranking.
+
+When finalizing with external results, supply `external_decisions` for at least
+the first five ranked windows: each has `observation_id`, `status` of `practice`,
+`validate` or `defer`, and a nonempty `reason`. At most three can be practice or
+validation focuses. Order decisions to express practice priority. Use the regular
+hypotheses, sections, experiments or validation_plan for causal interpretation
+and next-session instructions. Decisions are persisted in evidence; the finalizer
+rejects missing coverage rather than silently hiding major fast-section gaps.

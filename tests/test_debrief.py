@@ -185,7 +185,7 @@ def test_chinese_report_has_spatial_figures_and_no_raw_field_dump(tmp_path):
                      "confidence": "low", "confounders": ["缺少数据"]}],
                 "sections": [{"observation_id": loss["id"], "title": "看图定位这个区段",
                               "interpretation": "<script>not executable</script>"}],
-                "experiments": [{"observation_ids": [loss["id"]], "location": "distance 1234 m",
+                "experiments": [{"observation_ids": [loss["id"]], "location": "E1 · A区走线实验（地图右方0.25–0.30段）",
                                  "change": "固定一个参照", "baseline": "已记录的速度",
                                  "success_measure": "三个可比样本", "abort_condition": "有交通就停止",
                                  "re_test": "下一节复测"}]}
@@ -196,7 +196,7 @@ def test_chinese_report_has_spatial_figures_and_no_raw_field_dump(tmp_path):
     assert "只改这一项" in document and "候选快圈" in document
     assert "median_loss_s" not in document
     assert "Session and stint timing" not in document
-    assert "distance 1234 m" not in document
+    assert "E1 · A区走线实验（地图右方0.25–0.30段）" in document
     assert "<script>not executable</script>" not in document and "&lt;script&gt;" in document
     assert document.count("<script") == 1 and '<script id="route-controls">' in document
     assert "固定一个参照" in markdown

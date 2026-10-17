@@ -11,71 +11,26 @@ This is the detailed analysis policy for the MCP. Repository-aware agents should
 
 ## Agent contract
 
-Write the report in the user's language. Use a short summary and illustrated
-location sections, with the highlighted GPS map beside each diagnosis and speed
-comparison. Refer to map letters and recognizable mapped positions; do not rely
-on unexplained distance ranges or invent official corner numbers. Supply localized
-title/sections to the finalizer. Raw JSON keys belong in evidence, not human prose.
-Lead with at most three actionable corner areas and a next-session priority.
-Keep the all-lap matrix, virtual sums and boundary-state audit collapsed in the
-calculation appendix. They support the diagnosis; they are not the driver-facing
-answer. Separate observed time differences from achievable or guaranteed gains.
+For session or reference coaching, read and execute
+[`docs/analysis-methodology.md`](../docs/analysis-methodology.md), stages 1–6.
+That document owns analysis order, evidence requirements, prioritization,
+presentation and completion checks. This skill owns sensor semantics, capability
+gates and the diagnosis taxonomy below. Use `docs/session-debrief.md` for tool
+parameters and artifact schemas. Scenario prompts add only scenario differences.
+External references use `reference_paths`/`--reference` and an independent whole-route
+local-window scan. Inspect its observed ranking before selecting practice, including
+fast areas with little own-lap variance. Finalize the top-five selection/deferral
+reasons with `external_decisions`; use at most three practice/validation focuses.
 
-For each priority location, finish the causal chain: locate the delta, check
-adjoining-window timing, inspect recorded brake onset/pressure/release, steering
-build-up/unwind, and accelerator-pedal timing, then verify against speed, G and
-real GPS passages. A high pedal value with low speed can be inherited overslow;
-more or earlier power is not automatically the remedy. Different minimum-speed
-locations must not be treated as one shared apex when comparing timing. Use
-`corner_passages.input_analysis` and `timing_check`; withdraw a single-sector
-opportunity if the selected donor loses its advantage in the adjoining window,
-unless stronger evidence resolves why. Explain unavailable controls explicitly.
-Write `braking_analysis`, `steering_analysis`, `power_analysis` and `g_analysis` in each applicable
-report section, in coaching-priority order. Display large zoomable route details
-and synchronized controls directly; hiding curves in details is not analysis.
+Start complete reviews with `analyze_session_debrief` and all supplied files.
+Python measures; the hosting agent reads evidence and actual figures, interprets,
+and finishes both reports with `finalize_session_debrief`. An
+`awaiting_agent_interpretation` bundle is not completed coaching.
 
-Timed does not mean pushing. Use candidate-push selection and inspect concentrated
-loss flags before diagnosing technique. Never label a slow lap as traffic from
-telemetry alone, or call all-timed-lap spread driver inconsistency. Driver/video
-lap_context takes precedence over pace screening. Near-PB pace still does not
-establish a clean lap. Compare equivalent populations; the narrower spread after
-pace filtering is a selection effect, not evidence of improved consistency.
-
-For time opportunities, start with the all-lap mini-sector matrix and virtual
-best sources. Whole-lap pace screening must not discard fast local sections on
-otherwise slower laps. Explicit external context and local quality flags still
-apply. Diagnose the best whole lap against the fastest donor for each selected
-section using the common physical GPS grid. Check adjoining entry/exit states;
-never treat the sum as an attainable or guaranteed target. Show per-session and
-combined results separately so changed conditions remain visible.
-
-For complete session analysis and coaching, default to `analyze_session_debrief`
-with every supplied file and all stints. Or run `track-telemetry-coach analyze
-FILES --output DIR` in a shell environment. Follow
-[`docs/session-debrief.md`](../docs/session-debrief.md). Never infer same-layout
-confirmation from a track name. Without independent confirmation, report timing
-and consistency and explain the comparison limitation.
-
-The deterministic workflow returns `awaiting_agent_interpretation`. Read the
-evidence and inspect actual plots, then update report.md, report.html and JSON
-hypotheses/practice_plan. Cite observations, confidence and confounders; prescribe
-at most three experiments with location, baseline, one behavior, success measure,
-abort criteria and re-test. Do not deliver a plot bundle as completed coaching.
-No particular LLM provider is required. Focused requests retain the tools below.
-
-For RCZ work, the default sequence is:
-
-```text
-list_sessions
-  -> prepare_session
-  -> inspect_session only when detailed evidence quality matters
-  -> smallest relevant analysis tool set
-  -> interpretation
-```
-
-Treat `prepare_session.recommended_tools` as general-purpose availability hints, not a checklist. Treat `available_specialized_tools` as opt-in capabilities that should be used only when the user's question specifically requires them.
-
-Do not call every supported tool by default.
+For mid-session imports, re-run the analysis from scratch (no incremental merge).
+Use comparable same-day data; candidate pools under five laps make interruption
+flags advisory. End with an explicit next-session direction even when the result
+is a concrete validation plan. A practice card uses the same evidence gates.
 
 ## Visualization policy (P1/P2)
 
@@ -176,16 +131,11 @@ Use the reusable task prompts in `prompts/` for output structure and task-specif
 
 When a request spans multiple tasks, use `session_coach.md` as the primary structure and borrow the specialized prompt rules only for the relevant sections.
 
-## Workflow
+## Measurement reference
 
-Use `docs/analysis-methodology.md` as the overall review loop:
-
-```text
-Validate -> Select reference -> Locate time loss -> Classify -> Diagnose
--> Cross-check -> Prioritize -> Prescribe -> Re-test
-```
-
-The steps below define the source-specific rules used inside that loop.
+The unified workflow in `docs/analysis-methodology.md` decides what to measure
+next. The numbered subsections below are capability and source references, not
+a second coaching sequence.
 
 ### 0. Discover and gate tools lazily
 
@@ -359,25 +309,5 @@ Then provide:
 
 Keep recommendations tied to measured evidence. Explicitly state uncertainty where channels, layout alignment, reference data, control-source fallback, or slip-angle anchoring are incomplete.
 
-Default corner presentation: exactly one power-control trace (prefer accelerator pedal), one brake trace (prefer pressure), steering, and planar combined G = hypot(lat_g, long_g). Use one short finding per item; omit duplicate sensors and repeated caveats. Keep detailed channels and provenance in JSON.
-
-Treat mini-sectors as loss locators, not causal corner boundaries. Inspect
-`corner_passages.chain_window` and split upstream/target/downstream timing.
-The provisional window follows verified brake events toward the next brake,
-using shared physical limits for both laps. Missing events fall back explicitly;
-lap boundaries truncate the chain. Non-overlapping upstream events may be different
-corners, not a matched action. Trace exit-speed deficits into downstream acceleration
-before prescribing; do not diagnose an already-full-pedal sector as late power.
-Keep the four concise signal findings, but name the upstream action to practise
-and measure the full linked window. Official corner/straight identity still needs
-external confirmation.
-
-Concision governs presentation, not reasoning. Compare competing line/turn-timing,
-braking and exit-state explanations before prescribing. Similar G/steering peaks
-neither prove nor exclude a line problem. Higher brake pressure may be a response
-to a tighter path. Inspect local GPS shape across spatial fit spans and repeated
-passes; `local_gps_geometry` is an approximate circle model, not track edges or
-available grip. Put the resulting short line finding in `line_analysis`. Never
-fill uncertainty with a generic brake-release/consistency instruction. If no
-correction is justified, finalize zero `experiments` with a concrete nonempty
-`validation_plan`; checking a hypothesis is a valid next-session plan.
+For corner presentation, linked-window reasoning, practice plans and report
+acceptance, follow the unified workflow in `docs/analysis-methodology.md`.

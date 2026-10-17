@@ -29,49 +29,38 @@ CONFOUNDERS = [
     "Measured differences are not guaranteed gains or proof of driver causation.",
     "GPS trajectories are not boundaries; interpolation adds no native samples.",
 ]
-HANDOFF = """Read evidence.json and plots. Finish report.md and report.html with coaching.
-Cite observation IDs and measured values for every diagnosis and experiment.
-Separate observations, hypotheses, confidence, confounders and unavailable data.
-Select at most three experiments. Each needs a location, one changed behavior, baseline,
-success measurement, safety/abort condition and next-session re-test.
-Distinguish early braking, overslow, weak/long braking, late power, weak exit,
-line issues and already-good-enough. Treat causal explanations as hypotheses,
-not measurements. Do not infer ABS, sideslip, surface or available grip. Preserve accelerator-pedal versus throttle-body semantics.
-Prefer repeatability and small steps in fast sections; never prescribe added slide.
-Do not promise theoretical gains. If layout is unconfirmed, obtain independent
-confirmation before comparing. Do not stop at plots. Mark coaching complete only
-after updating both reports, evidence hypotheses and the practice plan.
-All-timed-lap spread includes yielding, traffic, warmup and cooldown; it is not
-driver consistency. Use candidate-push laps for whole-lap execution review, but
-use all eligible local mini-sectors for virtual-best analysis, including good
-sections on otherwise slower laps. Inspect context and interruption flags.
-Pace screening cannot confirm intent or a clean lap. Prefer driver/video lap_context
-annotations when available, and never label an excluded slow lap as traffic by inference.
-Mini-sectors locate loss, not its cause. Inspect chain_window and upstream/target/
-downstream timing; trace the previous corner exit into downstream acceleration.
-Use shared physical limits, note missing/mismatched brake anchors and lap truncation.
-Before prescribing, inspect corner_passages.timing_check and near_best_passages: a
-sector donor can lose its advantage across adjoining sectors. Explain recorded
-braking, steering and pedal evidence, including contradictions, using input_analysis.
-Do not compare different minima as a shared apex or prescribe earlier power when
-the slower pass already applies more pedal. Order sections by coaching priority.
-Use finalize_session_debrief with the evidence path and coaching object to
-validate evidence references and write matching completed Markdown/HTML reports.
-Coaching fields: summary, hypotheses and experiments. Each hypothesis needs
-observation_ids, explanation, confidence and confounders. Each experiment needs
-observation_ids, location, change, baseline, success_measure, abort_condition and re_test.
-Keep corner reports concise: one power, one brake, steering and planar combined G,
-with short findings for presentation only; retain full reasoning and competing
-hypotheses in evidence. Compare line geometry, turn timing, brake response and
-exit state before selecting a cause. Similar G or steering peaks do not rule line
-geometry in or out. Brake differences may respond to a tighter line, not cause it.
-If a driving correction is not justified, use zero experiments with validation_plan
-rather than inventing a generic release/consistency cue.
-Match the user's language throughout. Optional language (zh-CN/en), title and
-sections entries (observation_id, title, what_happened, interpretation, cue,
-watch_out, braking_analysis, steering_analysis, power_analysis, g_analysis, line_analysis) produce a localized illustrated report. Explain locations using the
-report's highlighted GPS map, not distance-only descriptions or unverified
-official corner names. Keep raw fields and provenance in JSON, not human prose.
+HANDOFF = """Read docs/analysis-methodology.md and execute its unified stages 1–6.
+Read skill/SKILL.md for source semantics and diagnosis categories, then the matching
+scenario prompt under prompts/. Read evidence.json and inspect actual plots.
+If repository documents are unavailable, obtain them before interpreting.
+
+Review external_reference_scan independently across every covered physical window,
+including fast sections where own-lap variation is small. Explain each large
+external difference selected or deferred; observed-difference rank is not practice
+rank. Reference inputs must use reference_paths/--reference, not join driver PBs.
+Review opportunity_screening, all eligible local sectors and real intervals before
+shortlisting. Measure linked windows and shared physical markers before causal
+claims; initial observations may require targeted deterministic enrichment.
+Confirm physical layout independently before full comparison. Preserve units,
+native/export clocks and pedal versus throttle-body semantics. Missing data stays
+unavailable. Timed or pace-screened laps are not proven clean/push laps.
+
+Finish report.md, report.html and JSON through finalize_session_debrief.
+Cite observation IDs; separate measured findings, hypotheses and uncertainty.
+The final report must include findable locations, synchronized evidence and a
+next-session plan, not just plots. Match the user's language, and put generic
+limitations once in collapsed notes. Apply the unified completion checklist.
+
+Coaching fields: summary, hypotheses, experiments. Each hypothesis needs
+observation_ids, explanation, confidence (low/moderate/high), confounders.
+Each experiment needs observation_ids, location, change, baseline,
+success_measure, abort_condition, re_test. Select at most three; if no driving
+correction is justified, supply zero experiments and a nonempty validation_plan.
+Optional language (zh-CN/en), title, sections entries (observation_id, title,
+what_happened, interpretation, cue, watch_out, braking_analysis, steering_analysis,
+power_analysis, g_analysis, line_analysis) control localized presentation.
+The finalizer validates structure, not causal truth or figure quality; the hosting
+agent must complete the analysis and inspect the actual reports before delivery.
 """
 
 
@@ -178,7 +167,7 @@ def _interruption_sectors(result):
 
 
 def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, plots=True,
-                  lap_context=None):
+                  lap_context=None, reference_sessions=None):
     """Measure recordings separately, preserving clocks, stint boundaries and source gates."""
     if not sessions:
         raise ValueError("At least one telemetry file is required")
@@ -271,6 +260,9 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
         if "mini_sectors" in self_comparison:
             evidence["mini_sector_analysis"] = analyze_mini_sectors(
                 comparisons, self_comparison, ri, selection)
+            from .opportunity_screening import screen_training_opportunities
+
+            evidence["opportunity_screening"] = screen_training_opportunities(evidence["mini_sector_analysis"])
             composite = evidence["mini_sector_analysis"]["combined"]
             evidence["observations"].append({"id": "mini-sector-composite",
                 "measured": "Sum of eligible fastest measured mini-sectors; not a continuous or guaranteed lap",
@@ -281,8 +273,11 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
         from .corner_passes import measure_passages
         from .mini_sectors import opportunity_profiles
 
-        for observation in opportunity_profiles(evidence["mini_sector_analysis"], comparisons,
-                                                self_comparison, ri):
+        profiles = opportunity_profiles(evidence["mini_sector_analysis"], comparisons,
+                                          self_comparison, ri,
+                                          screening=evidence.get("opportunity_screening"))
+        for rank, observation in enumerate(profiles):
+            observation["map_letter"] = chr(65 + rank)
             profile = observation["physical_section_profile"]
             donor = observation["section_reference"]
             observation["corner_passages"] = _attempt(
@@ -294,9 +289,11 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
                                    observation["example_lap"], profile, "a"),
                 "reference": _attempt(_physical_section, sessions[donor["session"]], donor["lap"], profile, "b")}
             evidence["observations"].append(observation)
+            if rank >= 3:
+                continue
             evidence["practice_plan"].append({
                 "observation_id": observation["id"], "status": "agent_to_tailor",
-                "location": f"Mini-sector {observation['sector']}, locate on GPS map",
+                "location": f"Zone {observation['map_letter']}: sector {observation['sector']} area, see GPS map",
                 "experiment": "Review why the best actual lap differs from the recorded sector donor.",
                 "measure": "Compare entry, exit and the adjoining sector before changing one action.",
                 "abort": "Traffic, flags, reduced control margin or instructor concern.",
@@ -339,6 +336,19 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
             "measure": "Compare lap-time MAD per stint; confirm layout before section comparisons.",
             "abort": "Traffic, flags, fatigue or instructor concern.",
             "success": "Comparable data with maintained safety margin."}]
+    if reference_sessions and reference:
+        from .external_screening import scan_external_references
+
+        scan = scan_external_references(sessions[reference[0]], reference[1].number, reference_sessions)
+        evidence["external_reference_scan"] = scan
+        for window in scan["windows"]:
+            evidence["observations"].append({"id": window["id"],
+                "measured": "Independent external local-window difference, not practice priority",
+                "values": {key: window.get(key) for key in
+                           ("sector", "best_core_difference_s", "positive_passages", "unavailable_reason")},
+                "confidence": "low", "confounders": CONFOUNDERS})
+    elif reference_sessions:
+        evidence["unavailable_data"].append({"external_reference_scan": "No valid driver GPS baseline"})
     evidence = _clean(evidence)
     (output_dir / "evidence.json").write_text(json.dumps(evidence, indent=2, allow_nan=False), encoding="utf-8")
     (output_dir / "agent-handoff.md").write_text(HANDOFF, encoding="utf-8")
@@ -350,7 +360,7 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
     for obs in evidence["observations"]:
         if "sector" not in obs:
             continue
-        lines.append(f"- {obs['id']}: sector {obs['sector']}, best-lap section deficit "
+        lines.append(f"- {obs['id']}: zone {obs.get('map_letter', '?')} (sector {obs['sector']}), best-lap section deficit "
                      f"{obs['measured_difference_s']:.3f} s, confidence {obs['confidence']}.")
     lines += ["", "## Hypotheses and uncertainty", "", *CONFOUNDERS,
               "No driver-causation hypothesis has been established automatically.",
@@ -410,6 +420,28 @@ def finalize_debrief(evidence_path: Path, coaching: dict):
                ("title", "what_happened", "interpretation", "cue", "watch_out",
                 "braking_analysis", "steering_analysis", "power_analysis", "g_analysis", "line_analysis")):
             raise ValueError("Report section text must be strings")
+    external = evidence.get("external_reference_scan")
+    if external:
+        decisions = coaching.get("external_decisions", [])
+        external_ids = {w["id"] for w in external["windows"]}
+        if not isinstance(decisions, list) or any(not isinstance(d, dict) or
+                d.get("observation_id") not in external_ids or
+                d.get("status") not in {"practice", "validate", "defer"} or
+                not isinstance(d.get("reason"), str) or not d["reason"].strip()
+                for d in decisions):
+            raise ValueError("external_decisions need observation_id, status (practice/validate/defer), reason")
+        decided = [d["observation_id"] for d in decisions]
+        if len(decided) != len(set(decided)):
+            raise ValueError("Duplicate external decision")
+        required = set(external.get("required_review_ids", external["observed_difference_ranking"][:5]))
+        if not required.issubset(decided):
+            raise ValueError("Explain practice selection or deferral for the five largest external differences and flagged fast areas")
+        external["practice_decisions"] = decisions
+        external["practice_ranking"] = [d["observation_id"] for d in decisions
+                                         if d["status"] in {"practice", "validate"}]
+        if len(external["practice_ranking"]) > 3:
+            raise ValueError("At most three external practice/validation focuses")
+        external["practice_selection_status"] = "agent_reviewed"
     evidence.update(status="coaching_complete", hypotheses=hypotheses,
                     practice_plan=experiments, validation_plan=validation, coaching_summary=coaching["summary"])
     from .coaching_report import render_report
@@ -425,10 +457,11 @@ def finalize_debrief(evidence_path: Path, coaching: dict):
             "report_html": str(directory / "report.html")}
 
 
-def analyze_files(paths, output_dir: Path, **kwargs):
+def analyze_files(paths, output_dir: Path, *, reference_paths=None, **kwargs):
     sessions = [load_all_rcz_stints(p) if p.suffix.lower() == ".rcz" else load_telemetry(p)
                 for p in paths]
-    return build_debrief(sessions, output_dir, **kwargs)
+    references = [load_telemetry(p) for p in (reference_paths or [])]
+    return build_debrief(sessions, output_dir, reference_sessions=references, **kwargs)
 
 
 def main():
@@ -437,6 +470,8 @@ def main():
     analyze = sub.add_parser("analyze")
     analyze.add_argument("files", nargs="+", type=Path)
     analyze.add_argument("--output", required=True, type=Path)
+    analyze.add_argument("--reference", action="append", type=Path, default=[],
+                         help="External driver file; repeat for multiple references; scanned independently")
     analyze.add_argument("--same-layout-confirmed", action="store_true")
     analyze.add_argument("--no-plots", action="store_true")
     analyze.add_argument("--lap-context", type=Path,
@@ -449,6 +484,7 @@ def main():
         print(json.dumps(finalize_debrief(args.evidence, json.loads(args.coaching.read_text(encoding="utf-8")))))
         return
     result = analyze_files(args.files, args.output,
+                           reference_paths=args.reference,
                            same_layout_confirmed=args.same_layout_confirmed, plots=not args.no_plots,
                            lap_context=json.loads(args.lap_context.read_text(encoding="utf-8"))
                            if args.lap_context else None)

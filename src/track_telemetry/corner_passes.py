@@ -158,12 +158,14 @@ def measure_passages(sessions, observation, comparisons, self_result, reference_
                         "sign_convention": "Positive means best whole lap took longer than this donor; not a guaranteed gain."}
     near_best = []
     if mini_sector_analysis:
-        index = observation["sector"] - 1
-        rows = [r for r in mini_sector_analysis["rows"] if r["sectors"][index]["eligible"]]
-        best = min((r["sectors"][index]["duration_s"] for r in rows), default=None)
+        first, last = observation.get("start_sector", observation["sector"])-1, observation.get("end_sector", observation["sector"])
+        rows = [r for r in mini_sector_analysis["rows"] if all(s["eligible"] for s in r["sectors"][first:last])]
+        def duration(row):
+            return sum(s["duration_s"] for s in row["sectors"][first:last])
+        best = min((duration(r) for r in rows), default=None)
         tolerance = mini_sector_analysis["near_best_tolerance_s"]
         for row in rows:
-            if row["sectors"][index]["duration_s"] > best + tolerance:
+            if duration(row) > best + tolerance:
                 continue
             p = next((p for p in passages if (p["session"], p["lap"]) == (row["session"], row["lap"])), None)
             if p:

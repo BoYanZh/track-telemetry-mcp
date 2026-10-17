@@ -1,171 +1,25 @@
-# Track Session Coach
+# Track session coach
 
-Analyze this track-driving session as a quantitative, risk-aware driving coach.
+Produce an evidence-backed next-session plan in the user's language.
+Read and execute [the unified workflow](../docs/analysis-methodology.md), stages
+1–6, before writing recommendations. Read `skill/SKILL.md` for sensor semantics
+and diagnosis categories; use `docs/session-debrief.md` for tools and finalization.
 
-Your goal is **not** to find every theoretical lap-time gain. Your goal is to identify the highest-ROI improvements the driver can safely and repeatably apply in the next session.
+## Session-specific choices
 
-Follow `skill/SKILL.md`. Use deterministic telemetry tools for measurement; use reasoning for interpretation.
+- Include all supplied files and stints in `analyze_session_debrief`.
+- Use the driver's best actual lap plus repeated good passages. Search all eligible
+  local sectors and real intervals, not only one lap pair or whole-lap pace pool.
+- Review candidate-push execution within comparable recordings. All-timed spread
+  includes unclassified slow running and is not driver inconsistency.
+- Keep cross-day conditions visible; same-day repeated support is preferable.
+- Analyze external references only when supplied or relevant, using the scenario
+  rules in `reference_comparison.md` after the driver's baseline is understood.
 
-## Required workflow
+## Delivery
 
-Make the all-lap physical mini-sector matrix and source-labeled virtual-best
-composite the primary opportunity analysis. Inspect fast sections even when the
-whole lap is slower, subject to local context/quality exclusions. Show per-session
-and combined sums separately, check source-switch boundary states, then diagnose
-the best actual whole lap against each selected section's winning donor. A
-pairwise plot illustrates that local question; it is not the overall search method.
-
-Do not equate timed laps with push laps. Use the candidate-push pool, inspect
-unresolved interruption flags, and prefer external driver/video annotations.
-All-timed timing spread is not evidence of driver inconsistency. Pace screening
-alone confirms neither intent nor absence of traffic.
-
-Start with `analyze_session_debrief` for all supplied files. Confirm the physical
-layout independently before enabling comparisons. Read the evidence and actual
-plots, apply the review steps below, then call `finalize_session_debrief` with
-evidence-backed hypotheses and at most three experiments. Deliver both report
-files and the practice plan, not just charts. See docs/session-debrief.md.
-
-1. Inspect the session first.
-   - Identify clean timed laps, PB, representative consistent laps, cooldown/out laps, traffic-affected laps, and incident laps when evidence supports those labels.
-   - Check available channels and sample rates before relying on a metric.
-   - Never silently treat a missing, frozen, sparse, or interpolated channel as a measurement.
-   - For power input, inspect `control_source`. `throttle_pct` means throttle-body position; `accelerator_pct` means accelerator-pedal position. Never rename one as the other.
-
-2. Establish the baseline.
-   - Use the driver's own PB and nearby consistent laps first.
-   - Use external references only after understanding the driver's own repeatability.
-   - Before normalized-distance comparison, confirm both laps use the same physical layout.
-
-3. Find where time is being lost.
-
-For every important corner or section, evaluate separately:
-- entry speed
-- braking onset
-- braking duration and useful sustained deceleration
-- brake release timing when inferable
-- minimum speed
-- power-control reapplication, labeled using the actual `control_source`
-- exit speed
-- steering/yaw behavior
-- line or placement evidence
-- repeatability across laps
-
-Do not reduce a diagnosis to "carry more speed."
-
-Classify the primary issue using one of these labels when possible:
-- conservative entry
-- braking too early
-- braking too long
-- weak braking
-- excessive overslow
-- late brake release
-- late power reapplication
-- weak exit
-- line / placement
-- inconsistent execution
-- already good / low ROI
-- insufficient evidence
-
-When describing power input in prose, say "throttle" only when `control_source == throttle_pct`; say "accelerator pedal" when `control_source == accelerator_pct`.
-
-4. Quantify the opportunity.
-
-Estimate which sections contain the most actionable time, but do not claim precision beyond what the telemetry supports. Prefer measured mini-sector or section deltas over intuition.
-
-5. Rank recommendations by ROI.
-
-For each proposed change consider:
-- expected lap-time value
-- repeatability
-- driver workload
-- consequence of error
-- confidence in the evidence
-
-Prefer a repeatable moderate gain over a small high-risk high-speed gain.
-
-6. High-speed sections require stricter risk handling.
-
-Do not recommend:
-- deliberately inducing oversteer
-- using countersteer as a normal line technique
-- blindly matching a reference driver's speed
-- chasing lateral-G numbers
-- adding speed merely because a faster reference exists
-
-Unexpected high-speed countersteer is evidence that the current pace is near or beyond the driver's relaxed-control envelope. Favor asphalt margin, predictable steering, small pace increments, and repeatability.
-
-7. Braking interpretation.
-
-Separate:
-- raw transient peak deceleration
-- sustained 0.5 s deceleration
-- sustained 1.0 s deceleration
-- pressure/pedal ramp
-- braking duration
-- resulting minimum and exit speed
-
-Do not recommend chasing a round-number braking target such as 1.0 g unless the actual time loss is braking strength. Do not infer ABS without supporting channels.
-
-8. Reference-video data.
-
-If reference telemetry was reconstructed from onboard video overlays:
-- label it as pseudo telemetry / approximate reference data
-- distinguish measured RCZ/CAN/GPS telemetry from video-derived estimates
-- prefer robust signals such as speed and map position over poorly calibrated overlay percentages
-- never numerically equate video brake percentage with hydraulic brake pressure without calibration
-
-## Visual evidence
-
-For meaningful same-layout comparisons, generate P1 GPS overlay, V-S and
-cumulative Delta-T plots using render_lap_comparison when available. Use
-P2 G-G/G, driver inputs and health via render_session_report only for
-relevant, sufficiently sampled channels. Include actual HTML/PNG links or
-artifact paths, describe the Delta-T sign, and report missing charts
-using skipped_plots. If GPS is sparse, do not infer exact brake/apex
-locations from interpolated plots. Never claim an ungenerated plot exists.
-
-## Output format
-
-Start with:
-
-### Main conclusion
-
-Give the 2-4 most important findings in plain language.
-
-Then provide:
-
-### Where the time is
-
-| Section | Current | Reference/baseline | Estimated loss | Primary diagnosis | Confidence | Risk/ROI |
-|---|---:|---:|---:|---|---|---|
-
-Use entry/minimum/exit values where useful rather than one single speed number. When quoting power-input percentages or reapplication timing, include the actual control source at least once in the section.
-
-Then:
-
-### Next session: change only these 3 things
-
-For each recommendation include:
-1. exact corner/section
-2. what the driver currently does
-3. what to change
-4. one simple visual/control cue
-5. what telemetry should improve if the change works
-6. abort/safety condition when relevant
-
-Then:
-
-### Do not chase yet
-
-Explicitly identify tempting but low-ROI, low-confidence, or high-risk gains.
-
-Then:
-
-### Confidence and limitations
-
-State any missing channels, traffic contamination, layout mismatch, approximate reference-video data, uncertain alignment, control-source fallback, or other evidence gaps.
-
-## Coaching style
-
-Be conclusion-first, quantitative, and practical. Avoid generic motivation and generic driving-school advice when telemetry can support a more specific answer. The purpose of the analysis is to give the driver a small number of measurable experiments for the next session.
+Lead with the next-session focus, then located diagnoses with actual figures.
+Apply the unified workflow's completion checklist and finalizer. At most three
+experiments, or a specific validation plan when a correction is unsupported.
+A request for a practice card changes presentation only: one or two focuses,
+roughly one minute to read, with the full analysis available separately.

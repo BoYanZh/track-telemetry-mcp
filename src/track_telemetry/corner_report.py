@@ -49,10 +49,10 @@ def _route_view(passages, selected, baseline, donor, label, zh, *, shape_check=N
     length = max(1., 10 ** np.floor(np.log10(width / 6)))
     x, y, font = x0 + width * .07, y0 + height * .93, width / 48
     pieces.append(f'<path d="M{x:.3f},{y:.3f}h{length:.3f}" stroke="#26343c" stroke-width="3" vector-effect="non-scaling-stroke"/>'
-                  f'<text x="{x:.3f}" y="{y-font:.3f}" font-size="{font:.3f}">{length:g} m</text>')
+                  f'<text x="{x:.3f}" y="{y-font:.3f}" font-size="{font:.3f}">{length:g} 米</text>')
     pieces.append('</svg><figcaption>' + text(
-        f"共 {len(passages)} 次通过。橙：整圈最快；蓝：本段最快；灰：其他圈。默认查看相关上游动作，可放大、平移或展开后续路段。北朝上，横纵比例一致；路线散布包含 GPS 漂移，不是赛道边界。",
-        "Orange: best whole lap; blue: sector donor; grey: other passages. Zoom buttons and drag to pan. North up, equal scale. Scatter includes GPS drift; these are not track boundaries.") + '</figcaption></figure>')
+        f"共 {len(passages)} 次通过。橙：整圈最快；蓝：本段最快；灰：其他圈。默认查看相关上游动作，可放大、平移或展开后续路段。北朝上，横纵比例一致。",
+        "Orange: best whole lap; blue: sector donor; grey: other passages. Zoom buttons and drag to pan. North up, equal scale. ") + '</figcaption></figure>')
     return "".join(pieces)
 
 
@@ -107,7 +107,7 @@ def render_corner(observation, label, zh, *, description=None):
             parts = [("上游动作", "Upstream", timing["upstream_difference_s"]),
                      ("目标计时段", "Target", timing["core_difference_s"]),
                      ("后续路段", "Downstream", timing["downstream_difference_s"])]
-            message += " / ".join(f"{cn if zh else en} {value:+.3f}s" for cn, en, value in parts)
+            message += " / ".join(f"{cn if zh else en} {value:+.3f}{'秒' if zh else 's'}" for cn, en, value in parts)
         chain = observation["corner_passages"].get("chain_window", {})
         if chain.get("method") == "braking_to_next_braking":
             message += ("；截至圈末，未跨圈追踪。" if chain["end_progress"] >= 1 else "；截至两圈较早的下一次制动前。") if zh else ""
@@ -123,8 +123,10 @@ def render_corner(observation, label, zh, *, description=None):
             fallback if all(fallback in p.get("controls", {}) for p in selected) else preferred)
     power = common("accelerator_pct", "throttle_pct")
     brake = common("brake_pressure_kpa", "brake_pos_pct")
-    charts = [(power, ("油门 · 加速踏板 %" if power == "accelerator_pct" else "油门 · 节气门体 %") if zh else power),
-              (brake, ("刹车 · 压力 bar" if brake == "brake_pressure_kpa" else "刹车 · 踏板 %") if zh else brake),
+    speed = "speed_kmh"
+    charts = [(speed, "速度 · 公里/小时" if zh else "Speed · km/h"),
+              (power, ("油门 · 加速踏板 %" if power == "accelerator_pct" else "油门 · 节气门体 %") if zh else power),
+              (brake, ("刹车 · 压力 千帕" if brake == "brake_pressure_kpa" else "刹车 · 踏板 %") if zh else brake),
               ("steering_deg", "转向 · 度" if zh else "Steering · degrees"),
               ("combined_g", "总 G · 平面合成" if zh else "Combined G · planar")]
     pieces.append('<div class="input-traces">')
@@ -148,8 +150,7 @@ def render_corner(observation, label, zh, *, description=None):
         def trace(p):
             if name == "combined_g":
                 return [(s["time_s"], s["progress"], float(np.hypot(s["lat_g"], s["long_g"]))) for s in p["g_samples"]]
-            return [(s["time_s"], s["progress"], (s["value"] / 100 if name == "brake_pressure_kpa" and s["value"] is not None else s["value"]))
-                    for s in p.get("controls", {}).get(name, {}).get("samples", [])]
+            return [(s["time_s"], s["progress"], s["value"]) for s in p.get("controls", {}).get(name, {}).get("samples", [])]
 
         samples = [v for p in selected for _, _, v in trace(p) if v is not None]
         pieces.append('<figure><h3>' + title + '</h3>')
@@ -196,5 +197,5 @@ def render_corner(observation, label, zh, *, description=None):
     for key in analysis:
         explain(key)
     pieces.append('</div>')
-    pieces.append('<p class="note">' + ("浅色带是发现差距的计时段，不代表问题所在弯道；总 G = √(横向 G² + 纵向 G²)，不是抓地极限。" if zh else "Shading marks the target. Combined G = hypot(lateral G, longitudinal G), not available grip.") + '</p>')
+    pieces.append('<p class="note">' + ("浅色带为目标计时段；总 G = √(横向 G² + 纵向 G²)。" if zh else "Shading marks the target. Combined G = hypot(lateral G, longitudinal G).") + '</p>')
     return "".join(pieces)

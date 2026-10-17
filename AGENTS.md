@@ -29,25 +29,15 @@ For RaceChrono/RCZ analysis:
 
 Do not call every available tool by default.
 
-Before coaching, distinguish recorded timed laps from candidate push laps.
-Use the all-lap physical mini-sector matrix and source-labeled virtual-best
-composite as the primary opportunity analysis. Good local sections can come from
-otherwise slow laps. The spatial reference is a coordinate system, not a claim
-that its driver performance is fastest everywhere. Inspect boundary-state
-discontinuities before proposing combinations; virtual sums are not guaranteed gains.
-For priority sections, inspect `corner_passages`: real GPS routes and measured
-controls/G over adjoining physical sections. First check `timing_check`: if the
-single-sector advantage disappears across adjoining sections, do not prescribe
-it as recoverable time. Explain brake onset/pressure/release, steering transition
-and accelerator-pedal timing with `input_analysis` and vehicle response, including
-contradictory evidence. Keep the route large and zoomable and the control traces
-visible. In report `sections`, write `braking_analysis`, `steering_analysis` and
-`power_analysis` and `g_analysis` when recorded, or explain what is unavailable. Order sections by
-coaching priority. A continuous theoretical trajectory must never be invented.
-Do not interpret yielding, traffic, warmup or cooldown as technique loss or
-all-day timing spread as driver consistency. Pace screening cannot prove intent
-or clean running. Inspect lap-selection/interruption flags and prefer external
-driver/video annotations when available.
+External-driver files belong in `reference_paths`, not the driver `paths`. Review
+`external_reference_scan` across all covered sectors independently of own-lap
+ranking. Keep observed differences and practice priority separate; explain the
+five largest external gaps with `external_decisions` before finalization.
+
+For every session or reference coaching review, read and execute
+[the unified workflow](docs/analysis-methodology.md), stages 1–6. It owns opportunity
+screening, linked-window measurements, competing explanations, practice selection
+and report acceptance. Scenario prompts add only scenario-specific choices.
 
 ## Tool selection
 
@@ -91,15 +81,9 @@ does not create higher-rate GPS. Never join discontinuous stints in a plot.
 
 Prefer measured evidence over generic coaching.
 
-For corner/section analysis, distinguish among:
-
-1. conservative entry / braking too early;
-2. excessive minimum-speed loss / overslow;
-3. long or weak braking;
-4. power control reapplied too late;
-5. weak exit speed;
-6. line / placement / geometry problem;
-7. already good enough / poor risk-reward to chase.
+For corner/section analysis, classify with the canonical 8-class diagnosis list in
+`skill/SKILL.md` ("Diagnose sections with a fixed taxonomy"). Do not collapse
+these into generic advice such as "carry more speed."
 
 For high-speed sections, do not recommend deliberately adding slide because a reference driver is faster. Prefer repeatability, predictable steering, and incremental changes.
 
@@ -111,25 +95,7 @@ For source semantics, incident rules, output format, and risk-aware coaching gui
 
 Task-specific prompts are in [`prompts/`](prompts/).
 
-Default corner presentation: exactly one power-control trace (prefer accelerator pedal), one brake trace (prefer pressure), steering, and planar combined G = hypot(lat_g, long_g). Use one short finding per item; omit duplicate sensors and repeated caveats. Keep detailed channels and provenance in JSON.
-
-Treat mini-sectors as loss locators, not causal corner boundaries. Inspect
-`corner_passages.chain_window` and split upstream/target/downstream timing.
-The provisional window follows verified brake events toward the next brake,
-using shared physical limits for both laps. Missing events fall back explicitly;
-lap boundaries truncate the chain. Non-overlapping upstream events may be different
-corners, not a matched action. Trace exit-speed deficits into downstream acceleration
-before prescribing; do not diagnose an already-full-pedal sector as late power.
-Keep the four concise signal findings, but name the upstream action to practise
-and measure the full linked window. Official corner/straight identity still needs
-external confirmation.
-
-Concision governs presentation, not reasoning. Compare competing line/turn-timing,
-braking and exit-state explanations before prescribing. Similar G/steering peaks
-neither prove nor exclude a line problem. Higher brake pressure may be a response
-to a tighter path. Inspect local GPS shape across spatial fit spans and repeated
-passes; `local_gps_geometry` is an approximate circle model, not track edges or
-available grip. Put the resulting short line finding in `line_analysis`. Never
-fill uncertainty with a generic brake-release/consistency instruction. If no
-correction is justified, finalize zero `experiments` with a concrete nonempty
-`validation_plan`; checking a hypothesis is a valid next-session plan.
+Corner presentation, linked-window diagnosis and concision rules live in
+`skill/SKILL.md` (four-signal findings, mini-sectors as loss locators with
+upstream/target/downstream timing, line-vs-timing comparison, zero-experiment
+validation plans). Follow them as written; do not keep a local copy here.

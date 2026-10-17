@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import numpy as np
 
+MINI_SECTOR_COUNT = 20
+
 
 def _speed(profile, progress):
     if len(profile) < 2:
@@ -24,7 +26,7 @@ def _speed(profile, progress):
 
 def _reduce(rows):
     winners = []
-    for index in range(20):
+    for index in range(MINI_SECTOR_COUNT):
         samples = [(row, row["sectors"][index]) for row in rows
                    if row["sectors"][index]["eligible"]]
         if not samples:
@@ -61,6 +63,9 @@ def _reduce(rows):
             "best_whole_lap_source": {k: baseline[k] for k in ("session", "lap", "stint")} if baseline else None,
             "arithmetic_gap_s": baseline["lap_time_s"] - theoretical if baseline else None,
             "winners": winners, "transitions": transitions,
+            "ranked_best_lap_deficits": sorted(winners, key=lambda w: w["best_whole_lap_deficit_s"]
+                                               if w["best_whole_lap_deficit_s"] is not None else -np.inf,
+                                               reverse=True),
             "largest_best_lap_deficits": sorted(winners, key=lambda w: w["best_whole_lap_deficit_s"]
                                                 if w["best_whole_lap_deficit_s"] is not None else -np.inf,
                                                 reverse=True)[:3]}
@@ -98,7 +103,7 @@ def analyze_mini_sectors(comparisons, reference_result, reference_index, selecti
                      "alignment_quality": result["alignment_quality"]})
     rows.sort(key=lambda r: (r["session"], r["lap"]))
     usable = [r for r in rows if r["whole_lap_eligible"]]
-    return {"sector_count": 20, "rows": rows, "combined": _reduce(usable),
+    return {"sector_count": MINI_SECTOR_COUNT, "rows": rows, "combined": _reduce(usable),
             "by_session": {str(i): _reduce([r for r in usable if r["session"] == i])
                            for i in sorted({r["session"] for r in rows})},
             "near_best_tolerance_s": .1, "boundary_speed_flag_threshold_kmh": 5.,
@@ -111,7 +116,7 @@ def analyze_mini_sectors(comparisons, reference_result, reference_index, selecti
             ]}
 
 
-def opportunity_profiles(analysis, comparisons, reference_result, reference_index):
+def opportunity_profiles(analysis, comparisons, reference_result, reference_index, screening=None):
     """Compare the best actual lap to each winning donor on the same GPS grid."""
     combined = analysis["combined"]
     baseline = combined.get("best_whole_lap_source")
@@ -121,23 +126,39 @@ def opportunity_profiles(analysis, comparisons, reference_result, reference_inde
                if "profile" in c["result"]}
     results[reference_index, reference_result["lap_a"]["number"]] = reference_result
     base_profile = results[baseline["session"], baseline["lap"]]["profile"]
+    count = analysis.get("sector_count", MINI_SECTOR_COUNT)
+    shortlist = (screening or {}).get("ranked_shortlist") or []
+    if shortlist:
+        nets = {entry["sector"]: entry.get("linked_net_s") for entry in shortlist}
+        picked = {entry["sector"] for entry in shortlist}
+        ordered = [w for w in combined["ranked_best_lap_deficits"] if w["sector"] in picked]
+        ordered.sort(key=lambda w: (nets.get(w["sector"])
+                                    if nets.get(w["sector"]) is not None else -np.inf,
+                                    w["near_best_count"]), reverse=True)
+        candidates = ordered[:6]
+    else:
+        candidates = combined["largest_best_lap_deficits"]
     opportunities = []
-    for winner in combined["largest_best_lap_deficits"]:
+    for winner in candidates:
         if winner["best_whole_lap_deficit_s"] <= 1e-6:
             continue
         sector = winner["sector"]
+        first, last = winner.get("start_sector", sector), winner.get("end_sector", sector)
+        if first > last:
+            raise ValueError("Wrap intervals crossing the finish line are not diagnosable yet")
         donor = results[winner["session"], winner["lap"]]["profile"]
         profile = []
         for a, b in zip(base_profile, donor):
-            if not (sector - 1) / 20 - 1e-9 <= a["progress"] <= sector / 20 + 1e-9:
+            if not (first - 1) / count - 1e-9 <= a["progress"] <= last / count + 1e-9:
                 continue
             if not np.isclose(a["reference_distance_m"], b["reference_distance_m"]):
                 raise ValueError("Mini-sector profiles must share the same physical reference grid")
             profile.append({"reference_distance_m": a["reference_distance_m"], "progress": a["progress"],
                             "lap_a_elapsed_s": a["lap_a_elapsed_s"], "lap_b_elapsed_s": b["lap_a_elapsed_s"],
                             "lap_a_speed_kmh": a["lap_a_speed_kmh"], "lap_b_speed_kmh": b["lap_a_speed_kmh"]})
-        opportunities.append({"id": f"opportunity-{sector}", "sector": sector,
-                              "measured": "Best actual lap minus fastest observed sector; not guaranteed gain",
+        opportunities.append({"id": winner.get("observation_id", f"opportunity-{sector}"), "sector": sector,
+                              "start_sector": first, "end_sector": last,
+                              "measured": "Best actual lap minus fastest observed real interval; not guaranteed gain",
                               "measured_difference_s": winner["best_whole_lap_deficit_s"],
                               "loss_metric": "best_whole_lap_minus_sector_best",
                               "example_session": baseline["session"], "example_lap": baseline["lap"],
