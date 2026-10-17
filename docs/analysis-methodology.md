@@ -147,9 +147,11 @@ five largest gaps. Current descriptive trigger: target-segment minimum >=120 km/
 and observed target difference >=0.2 s. It is a review trigger, not a risk rating.
 
 The driver-facing overview opens four improvement candidates by default, showing
-one linked-window difference each. Start with agent-selected practice focuses,
-then fill with the largest linked differences while avoiding heavily overlapping
-windows. Four displayed candidates do not change the at-most-three experiment
+one linked-window difference each. Use one consistent candidate rule: reference pace candidates within best +
+max(1 s, 2%) in each source recording, median linked difference, repeated positive
+local-and-linked support, then merge heavily overlapping windows. Manual practice
+selections do not move a candidate to the front. Retain single fast sections in
+raw evidence; distinguish them from a repeatable training pattern. Four displayed candidates do not change the at-most-three experiment
 limit. Keep target-only differences, all-sector ranking and passage counts in
 collapsed evidence. Linked differences represent observed opportunity context,
 not an automatic guarantee that matching one isolated action recovers the sum. Explain repetition as how many reference passes were faster,
@@ -167,3 +169,7 @@ Each external decision also requires `cue`: one short driver-facing sentence
 stating what to do or test next session. Render cue in the overview; keep the
 selection/deferral reason in collapsed priority notes. Ranking mechanics and
 overlap warnings are not practice instructions.
+
+Use a representative passage nearest the cohort median for each candidate figure.
+Keep source lap and cohort statistics in evidence. These are descriptive opportunity
+priorities; the agent still chooses a small next-session plan and checks causes.

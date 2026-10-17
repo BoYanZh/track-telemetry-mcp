@@ -14,51 +14,32 @@ def render_external_scan(scan, coaching, evidence, zh):
     descriptions = {s["observation_id"]: s for s in coaching.get("sections", [])}
     decisions = {d["observation_id"]: d for d in scan.get("practice_decisions", [])}
     selected |= set(descriptions) & set(windows)
-    focus_ids = [key for key in scan.get("practice_ranking", []) if key in windows]
-    if not focus_ids:
-        focus_ids = [w["id"] for w in ranked if w["id"] in selected]
-    focus = [windows[key] for key in focus_ids[:4]]
-    by_linked = sorted(ranked, key=lambda w: (w['id'] in decisions,
-                       w['passages'][0]['linked_difference_s']), reverse=True)
-    def context(w):
-        padding = 1 / max(len(windows), 1)
-        return max(0., w['start_progress']-padding), min(1., w['end_progress']+padding)
-    for candidate in by_linked:
-        if len(focus) >= 4:
-            break
-        if candidate in focus:
-            continue
-        lo, hi = context(candidate)
-        overlaps = False
-        for existing in focus:
-            a, b = context(existing)
-            if max(0., min(hi, b)-max(lo, a)) > .5 * min(hi-lo, b-a) + 1e-9:
-                overlaps = True
-        if not overlaps:
-            focus.append(candidate)
-    # Very short layouts may not contain four distinct linked areas.
-    if not focus:
-        focus = by_linked[:4]
+    from .external_screening import rank_linked_candidates
+    candidates, focuses = rank_linked_candidates(scan)
+    summaries = {item["window"]["id"]: item for item in candidates}
+    ranked = [item["window"] for item in candidates]
+    focus = [item["window"] for item in focuses]
+    priorities = {item["window"]["id"]: i for i, item in enumerate(focuses, 1)}
     focus_keys = {w["id"] for w in focus}
     other = [w for w in ranked if w["id"] not in focus_keys]
     pieces = ['<section id="external-scan"><h2>' + tr("高手对照：先看这几个位置", "Reference comparison: start here") + '</h2><p>' + tr(
-        "先看四个改进候选。时间差覆盖前弯到下一次制动前，拆分见各处说明；作为整套动作的改善空间参考，重叠区间不相加。",
+        "按参考车手多次快圈的典型时间差排序，合并高度重叠的区域，先展开四处；入口状态和练习动作在各处说明。",
         "Start with four improvement candidates. Linked differences cover entry, target and downstream acceleration; they guide opportunity assessment. Overlapping differences are not additive.") + '</p>']
     md = ['## ' + tr("高手对照：先看这几个位置", "Reference comparison: start here"), '']
 
     def table(items):
-        rows = ['<table><tr><th>'+tr('位置','Location')+'</th><th>'+tr('关联窗口差','Linked-window difference')+'</th><th>'+tr('下节怎么练','Next-session cue')+'</th></tr>']
+        rows = ['<table><tr><th>'+tr('位置','Location')+'</th><th>'+tr('典型关联窗口差','Typical linked difference')+'</th><th>'+tr('下节怎么练','Next-session cue')+'</th></tr>']
         for w in items:
-            p = w['passages'][0]
             decision = decisions.get(w['id'])
             state = (decision.get('cue') if decision else None) or descriptions.get(w['id'], {}).get('cue') or '—'
-            rows.append(f'<tr><td><a href="#{w["id"]}">S{w["sector"]:02}</a></td><td>{p["linked_difference_s"]:+.2f} '+tr('秒','s')+'</td><td>'+html.escape(state)+'</td></tr>')
+            rows.append(f'<tr><td><a href="#{w["id"]}">{str(priorities[w["id"]])+" · " if w["id"] in priorities else ""}S{w["sector"]:02}</a></td><td>{summaries[w["id"]]["typical_difference_s"]:+.2f} '+tr('秒','s')+'</td><td>'+html.escape(state)+'</td></tr>')
         rows.append('</table>')
         return ''.join(rows)
 
     pieces.append(table(focus))
+    pieces.append('<details><summary>'+tr('排序怎么算','Ranking method')+'</summary><p>'+tr('先筛参考车手自身最快圈后max(1秒，2%)以内的候选圈，再用关联窗口差的中位数排序；优先保留至少两次更快的区域，并合并高度重叠窗口。这个筛选只表示配速相近。','Use reference pace candidates within best + max(1 s, 2%), rank median linked differences with repeated positive support, and merge overlapping windows.')+'</p></details>')
     for w in focus:
-        p = w['passages'][0]
+        p = summaries[w['id']]['representative']
         state = decisions.get(w['id'], {}).get('cue') or descriptions.get(w['id'], {}).get('cue') or '—'
         md.append(f'- S{w["sector"]:02}: '+tr('本段慢 ', 'Local difference ')+f'{p["core_difference_s"]:.2f} '+tr('秒。','s. ')+state)
     pieces.append('<p>'+tr('橙色：你；蓝色：参考；浅黄：本段。','Orange: you; blue: reference; yellow: target segment.')+'</p>')
@@ -66,8 +47,8 @@ def render_external_scan(scan, coaching, evidence, zh):
     for rank, w in enumerate(detail_order):
         if other and rank == len(focus):
             pieces.append('<details class="external-other"><summary>'+tr(f'查看其余{len(other)}段',f'Other {len(other)} windows')+'</summary>'+table(other))
-        p = w['passages'][0]
-        title = f'S{w["sector"]:02} · ' + tr(f'高手参考{p["reference"]+1}第{p["lap"]}圈', f'Reference {p["reference"]+1}, lap {p["lap"]}')
+        p = summaries[w['id']]['representative']
+        title = (tr(f'第{rank+1}优先 · ', f'Priority {rank+1} · ') if w['id'] in focus_keys else '') + f'S{w["sector"]:02} · ' + tr(f'高手参考{p["reference"]+1}第{p["lap"]}圈', f'Reference {p["reference"]+1}, lap {p["lap"]}')
         pieces.append(f'<details id="{w["id"]}"'+(' open' if w['id'] in focus_keys else '')+'><summary>'+title+'</summary>')
         zone = {"letter": f'S{w["sector"]:02}', "lo": w["start_progress"], "hi": w["end_progress"], "color": "#126d82"}
         pieces.append(_map(evidence, [zone], zh))

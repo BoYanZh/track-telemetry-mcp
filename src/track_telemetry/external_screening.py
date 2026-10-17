@@ -180,7 +180,7 @@ def scan_external_references(driver, lap_number, references, *, sectors=20):
                         v = marker[who]
                         if "lat_g" in v and "long_g" in v:
                             v["combined_g"] = float(np.hypot(v["lat_g"], v["long_g"]))
-                passages.append({"reference": index, "lap": other.number,
+                passages.append({"reference": index, "lap": other.number, "reference_lap_duration_s": other.duration_s,
                     "core_difference_s": core_delta,
                     "linked_difference_s": float(np.interp(linked_end, grid, delta)),
                     "linked_end_m": linked_end,
@@ -220,7 +220,7 @@ def scan_external_references(driver, lap_number, references, *, sectors=20):
     fast_ids = [w["id"] for w in ranked if w["baseline_core_min_speed_kmh"] >= 120
                 and w["best_core_difference_s"] >= .2]
     required = list(dict.fromkeys([w["id"] for w in ranked[:5]] + fast_ids))
-    return {"scope": "individually GPS-matched local windows; full-layout identity unconfirmed",
+    result = {"scope": "individually GPS-matched local windows; full-layout identity unconfirmed",
             "baseline_lap": lap_number, "references": inventory, "windows": windows,
             "observed_difference_ranking": [w["id"] for w in ranked],
             "practice_ranking": [], "practice_selection_status": "awaiting_agent_interpretation",
@@ -231,3 +231,53 @@ def scan_external_references(driver, lap_number, references, *, sectors=20):
                 "Ranking measures observed differences, not recoverable gains or practice priority.",
                 "GPS proximity is local matching evidence, not full-layout confirmation.",
                 "Pace, traffic, vehicle, axes and sensor calibration require interpretation."]}
+    candidates, focuses = rank_linked_candidates(result)
+    result["candidate_ranking"] = [{"id": item["window"]["id"],
+        "typical_difference_s": item["typical_difference_s"],
+        "reference_passages": item["reference_passages"], "positive_passages": item["positive_passages"],
+        "representative_lap": item["representative"]["lap"],
+        "repeatable": item["repeatable"], "pace_pool_fallback": item["pace_pool_fallback"]} for item in candidates]
+    result["default_focus_ids"] = [item["window"]["id"] for item in focuses]
+    return result
+
+
+def rank_linked_candidates(scan):
+    """Rank repeatable linked differences on comparable reference pace, without manual favorites."""
+    best = {}
+    for w in scan["windows"]:
+        for p in w.get("passages", []):
+            duration = p.get("reference_lap_duration_s")
+            if duration is not None:
+                best[p["reference"]] = min(best.get(p["reference"], duration), duration)
+    items = []
+    for w in scan["windows"]:
+        pool = [p for p in w.get("passages", []) if p.get("reference_lap_duration_s") is None or
+                p["reference_lap_duration_s"] <= best[p["reference"]] + max(1., best[p["reference"]]*.02)]
+        fallback = not pool
+        if fallback:
+            pool = w.get("passages", [])
+        if not pool:
+            continue
+        typical = float(np.median([p["linked_difference_s"] for p in pool]))
+        positive = sum(p["core_difference_s"] > 0 and p["linked_difference_s"] > 0 for p in pool)
+        representative = min(pool, key=lambda p: abs(p["linked_difference_s"]-typical))
+        items.append({"window": w, "typical_difference_s": typical,
+                      "reference_passages": len(pool), "positive_passages": positive,
+                      "repeatable": not fallback and positive >= 2 and positive > len(pool)/2,
+                      "pace_pool_fallback": fallback,
+                      "representative": representative})
+    items.sort(key=lambda item: (item["repeatable"], item["typical_difference_s"]), reverse=True)
+    selected = []
+    for item in items:
+        w = item["window"]
+        scale = (w["end_progress"]-w["start_progress"]) / np.ptp(w["core_limits_m"])
+        lo = w["start_progress"] + (w["grid_m"][0]-w["core_limits_m"][0])*scale
+        hi = w["start_progress"] + (item["representative"].get("linked_end_m", w["grid_m"][-1])-w["core_limits_m"][0])*scale
+        item["physical_limits"] = (float(lo), float(hi))
+        if len(selected) == 4 or item["typical_difference_s"] <= 0:
+            continue
+        if any(max(0., min(hi, s["physical_limits"][1])-max(lo, s["physical_limits"][0])) >
+               .5*min(hi-lo, s["physical_limits"][1]-s["physical_limits"][0])+1e-9 for s in selected):
+            continue
+        selected.append(item)
+    return items, selected

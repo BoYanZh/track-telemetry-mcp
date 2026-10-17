@@ -91,3 +91,22 @@ def test_linked_window_stops_before_earlier_next_brake():
     assert bounded and abs(end-275.) < 1e-9
     end, bounded = _linked_end(grid, driver_times, reference_times, 200., [], [])
     assert not bounded and end == 500.
+
+
+def test_candidate_order_ignores_manual_favorites_and_single_hero_pass():
+    from track_telemetry.external_screening import rank_linked_candidates
+    def window(key, start, gaps):
+        return {'id': key, 'start_progress': start, 'end_progress': start+.05,
+                'core_limits_m': [100., 200.], 'grid_m': [0., 100., 200., 300.],
+                'passages': [{'reference': 0, 'lap': n, 'reference_lap_duration_s': duration,
+                              'core_difference_s': gap, 'linked_difference_s': gap,
+                              'linked_end_m': 300.}
+                             for n, (duration, gap) in enumerate(zip([100.,101.,101.5,150.], gaps))]}
+    hero = window('hero', .1, [8., .1, .1, 99.])
+    repeated = window('repeated', .6, [1.,1.1,1.2,99.])
+    scan = {'windows': [hero, repeated], 'practice_ranking': ['hero']}
+    items, focuses = rank_linked_candidates(scan)
+    assert items[0]['window']['id'] == 'repeated'
+    assert abs(items[0]['typical_difference_s']-1.1)<1e-9
+    assert items[0]['reference_passages'] == 3
+    assert focuses[0]['window']['id'] == 'repeated'
