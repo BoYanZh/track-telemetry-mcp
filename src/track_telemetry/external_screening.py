@@ -8,6 +8,7 @@ from __future__ import annotations
 import numpy as np
 
 from .alignment import _gps_trace
+from .braking import analyze_braking
 from .geometry import cumulative_distance_m, latlon_to_xy_m
 
 
@@ -82,6 +83,28 @@ def _signals(session, times):
     return result
 
 
+
+def _brake_events(session, lap_number):
+    pressure = session.optional_channel("brake_pressure_kpa")
+    if pressure is None or pressure.units != "kPa":
+        return []
+    try:
+        return analyze_braking(session, lap_number)["events"]
+    except (KeyError, ValueError):
+        return []
+
+
+def _linked_end(grid, driver_times, reference_times, core_end, driver_events, reference_events):
+    endpoints = []
+    for times, events in ((driver_times, driver_events), (reference_times, reference_events)):
+        target_end_time = float(np.interp(core_end, grid, times))
+        following = next((event for event in events if event["start_s"] > target_end_time), None)
+        if following and following["start_s"] <= times[-1]:
+            # Stop before the first recorded onset in either passage.
+            endpoint = float(np.interp(following["start_s"] - .05, times, grid))
+            endpoints.append(max(core_end, endpoint))
+    return min(endpoints) if endpoints else float(grid[-1]), bool(endpoints)
+
 def scan_external_references(driver, lap_number, references, *, sectors=20):
     """Rank observed external differences; leave practice selection to the agent."""
     lap = driver.lap(lap_number)
@@ -103,6 +126,9 @@ def scan_external_references(driver, lap_number, references, *, sectors=20):
                 traces.append((index, session, other, et, np.c_[ex, ey]))
             except ValueError as exc:
                 exclusions.append({"reference": index, "lap": other.number, "reason": str(exc)})
+    driver_events = _brake_events(driver, lap_number)
+    event_cache = {(i, other.number): _brake_events(session, other.number)
+                   for i, session, other, _, _ in traces}
     windows = []
     for sector in range(sectors):
         lo, hi = sector / sectors, (sector + 1) / sectors
@@ -133,13 +159,16 @@ def scan_external_references(driver, lap_number, references, *, sectors=20):
                 if "speed_kmh" not in measured:
                     raise ValueError("Missing finite speed data")
                 delta = (bt - bt[0]) - (rt - rt[0])
+                linked_end, brake_bounded = _linked_end(grid, bt, rt, core[1], driver_events,
+                                                        event_cache[index, other.number])
+                limits = np.unique([grid[0], *core, linked_end])
                 stages = np.diff(np.interp(limits, grid, delta))
                 core_delta = float(np.interp(core[1], grid, delta) - np.interp(core[0], grid, delta))
                 rx, ry = latlon_to_xy_m(session.channel("gps_latitude_deg").interp(rt),
                                         session.channel("gps_longitude_deg").interp(rt), **origin)
                 core_mask = (grid >= core[0]) & (grid <= core[1])
                 markers = []
-                for g in np.unique([grid[0], core[0], (core[0]+core[1])/2, core[1], grid[-1]]):
+                for g in np.unique([grid[0], core[0], (core[0]+core[1])/2, core[1], linked_end]):
                     markers.append({"distance_m": float(g),
                         "driver_time_s": float(np.interp(g, grid, bt)),
                         "reference_time_s": float(np.interp(g, grid, rt)),
@@ -152,10 +181,18 @@ def scan_external_references(driver, lap_number, references, *, sectors=20):
                         if "lat_g" in v and "long_g" in v:
                             v["combined_g"] = float(np.hypot(v["lat_g"], v["long_g"]))
                 passages.append({"reference": index, "lap": other.number,
-                    "core_difference_s": core_delta, "linked_difference_s": float(delta[-1]),
+                    "core_difference_s": core_delta,
+                    "linked_difference_s": float(np.interp(linked_end, grid, delta)),
+                    "linked_end_m": linked_end,
+                    "linked_end_reason": "before_next_braking" if brake_bounded else "screening_boundary_fallback",
+                    "upstream_difference_s": float(np.interp(core[0], grid, delta)),
+                    "target_difference_s": core_delta,
+                    "downstream_difference_s": float(np.interp(linked_end, grid, delta)-np.interp(core[1], grid, delta)),
+                    "target_entry_brake_kpa": {"driver": float(np.interp(core[0], grid, baseline["brake_pressure_kpa"])) if "brake_pressure_kpa" in baseline else None,
+                                                "reference": float(np.interp(core[0], grid, measured["brake_pressure_kpa"])) if "brake_pressure_kpa" in measured else None},
                     "stage_differences_s": stages.tolist(), "stage_boundaries_m": limits.tolist(),
                     "entry_speed_kmh": measured["speed_kmh"][0],
-                    "exit_speed_kmh": measured["speed_kmh"][-1],
+                    "exit_speed_kmh": float(np.interp(linked_end, grid, measured["speed_kmh"])),
                     "source_times_s": rt.tolist(), "signals": measured,
                     "delta_s": delta.tolist(), "p95_cross_track_m": error,
                     "core_min_speed_kmh": float(np.min(np.array(measured["speed_kmh"])[core_mask])),
@@ -174,7 +211,9 @@ def scan_external_references(driver, lap_number, references, *, sectors=20):
             "passages": passages, "excluded_passages": rejected,
             "best_core_difference_s": passages[0]["core_difference_s"] if passages else None,
             "positive_passages": sum(p["core_difference_s"] > 0 for p in passages),
-            "route_xy": base.tolist()})
+            "route_xy": base.tolist(),
+            "driver_route_xy": np.c_[
+                np.interp(bt, t, x), np.interp(bt, t, y)].tolist()})
     ranked = sorted((w for w in windows if w.get("best_core_difference_s") is not None),
                     key=lambda w: w["best_core_difference_s"], reverse=True)
     # A descriptive review trigger, not an estimate of driving risk or available grip.

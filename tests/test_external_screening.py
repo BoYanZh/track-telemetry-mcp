@@ -77,3 +77,15 @@ def test_fast_area_review_is_independent_of_top_five():
     assert set(scan['fast_area_review_ids']) - top
     assert set(scan['fast_area_review_ids']) <= set(scan['required_review_ids'])
     assert not scan['practice_ranking']
+
+
+def test_linked_window_stops_before_earlier_next_brake():
+    from track_telemetry.external_screening import _linked_end
+    grid = np.arange(6.)*100
+    driver_times = np.arange(6.)
+    reference_times = np.arange(6.)*.9
+    end, bounded = _linked_end(grid, driver_times, reference_times, 200.,
+                              [{'start_s': 1.}, {'start_s': 2.8}], [{'start_s': 3.6}])
+    assert bounded and abs(end-275.) < 1e-9
+    end, bounded = _linked_end(grid, driver_times, reference_times, 200., [], [])
+    assert not bounded and end == 500.

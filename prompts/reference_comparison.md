@@ -42,3 +42,6 @@ For each located area state diagnosis, measured difference, competing explanatio
 G/vehicle response when available, and one next-session action or validation.
 Keep source details in JSON and generic limitations in collapsed notes. Apply the
 unified completion checklist; finish reports and a prioritized practice plan.
+
+Use the unified workflow's brake-boundary and loss-attribution requirements before
+quantifying an improvement; show them beside the diagnosed location.

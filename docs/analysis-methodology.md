@@ -154,3 +154,11 @@ limit. Keep target-only differences, all-sector ranking and passage counts in
 collapsed evidence. Linked differences represent observed opportunity context,
 not an automatic guarantee that matching one isolated action recovers the sum. Explain repetition as how many reference passes were faster,
 not a confidence score. Full-route analysis does not require a full-route main table.
+
+Before attributing linked time to an action, split pre-target, target and post-target
+increments and state the speed carried into the window. Show whether target entry
+is already under braking. End linked timing before the earlier next recorded brake
+onset after the target in either passage; retain an explicit screening-boundary
+fallback if absent. Do not include a subsequent braking zone in the claimed exit
+benefit. A linked gap can span multiple actions and is not recoverable by fixing
+one brake application. Keep this explanation beside the location, not only in JSON.

@@ -42,7 +42,7 @@ def render_external_scan(scan, coaching, evidence, zh):
     focus_keys = {w["id"] for w in focus}
     other = [w for w in ranked if w["id"] not in focus_keys]
     pieces = ['<section id="external-scan"><h2>' + tr("高手对照：先看这几个位置", "Reference comparison: start here") + '</h2><p>' + tr(
-        "先看四个改进候选。时间差包含前弯、本段和后续加速，作为把整套动作做好后的改善空间参考；重叠区间不相加。",
+        "先看四个改进候选。时间差覆盖前弯到下一次制动前，拆分见各处说明；作为整套动作的改善空间参考，重叠区间不相加。",
         "Start with four improvement candidates. Linked differences cover entry, target and downstream acceleration; they guide opportunity assessment. Overlapping differences are not additive.") + '</p>']
     md = ['## ' + tr("高手对照：先看这几个位置", "Reference comparison: start here"), '']
 
@@ -71,8 +71,18 @@ def render_external_scan(scan, coaching, evidence, zh):
         pieces.append(f'<details id="{w["id"]}"'+(' open' if w['id'] in focus_keys else '')+'><summary>'+title+'</summary>')
         zone = {"letter": f'S{w["sector"]:02}', "lo": w["start_progress"], "hi": w["end_progress"], "color": "#126d82"}
         pieces.append(_map(evidence, [zone], zh))
-        xy = np.asarray(w['route_xy'])
-        ref_xy = np.asarray(p['reference_route_xy'])
+        original_grid = np.asarray(w['grid_m'])
+        endpoint = p.get('linked_end_m', original_grid[-1])
+        display_grid = np.unique(np.r_[original_grid[original_grid < endpoint], endpoint])
+        def shown(values):
+            return np.interp(display_grid, original_grid, values)
+        driver_route = np.asarray(w.get('driver_route_xy', w['route_xy']))
+        if len(driver_route) == len(original_grid):
+            xy = np.c_[shown(driver_route[:, 0]), shown(driver_route[:, 1])]
+        else:
+            xy = driver_route
+        raw_reference = np.asarray(p['reference_route_xy'])
+        ref_xy = np.c_[shown(raw_reference[:, 0]), shown(raw_reference[:, 1])]
         both = np.vstack([xy, ref_xy])
         minimum = both.min(axis=0)
         span = max(float(np.ptp(both[:, 0])), float(np.ptp(both[:, 1])), 1.)
@@ -89,8 +99,21 @@ def render_external_scan(scan, coaching, evidence, zh):
                     'power_analysis', 'g_analysis', 'line_analysis', 'cue', 'watch_out'):
             if desc.get(key):
                 pieces.append('<p>'+html.escape(desc[key])+'</p>')
-        pieces.append('<p>'+tr('入口速度（你/参考）：','Entry speed (you/reference): ')+f'{w["baseline_entry_speed_kmh"]:.1f}/{p["entry_speed_kmh"]:.1f} km/h; '
-                      +tr('出口：','Exit: ')+f'{w["baseline_exit_speed_kmh"]:.1f}/{p["exit_speed_kmh"]:.1f} km/h.</p>')
+        if 'upstream_difference_s' in p:
+            pieces.append('<p>'+tr('差距从哪里来：进入本段前 ', 'Loss location: before target ')
+                          +f'{p["upstream_difference_s"]:+.2f}'+tr('秒，本段新增 ', ' s; target ')
+                          +f'{p["target_difference_s"]:+.2f}'+tr('秒，出弯后 ', ' s; after target ')
+                          +f'{p["downstream_difference_s"]:+.2f}'+tr('秒。', ' s.')+'</p>')
+            brake = p['target_entry_brake_kpa']
+            if any(value is not None and value >= 100 for value in brake.values()):
+                values = ' / '.join(f'{brake[key]/100:.1f}' if brake[key] is not None else '—'
+                                    for key in ('driver', 'reference'))
+                pieces.append('<p>'+tr('本段起点已涉及制动，压力（你/参考）：',
+                                      'Braking is already involved at target entry (you/reference): ')+values+' bar。</p>')
+            boundary = tr('计时止于两圈较早的下一次制动前。', 'Timing stops before the earlier next brake onset.') if p['linked_end_reason']=='before_next_braking' else tr('未找到下一次制动，暂以图示边界截止。', 'No next brake found; using the displayed screening boundary.')
+            pieces.append('<p>'+boundary+'</p>')
+        pieces.append('<p>'+tr('入口速度（你/参考）：' ,'Entry speed (you/reference): ')+f'{w["baseline_entry_speed_kmh"]:.1f}/{p["entry_speed_kmh"]:.1f} km/h; '
+                      +tr('出口：','Exit: ')+f'{np.interp(endpoint, original_grid, w["baseline_signals"]["speed_kmh"]):.1f}/{p["exit_speed_kmh"]:.1f} km/h.</p>')
         names = [('speed_kmh',tr('速度 · 公里/小时','Speed · km/h')),
                  ('brake_pressure_kpa',tr('制动压力 · kPa','Brake · kPa')),
                  ('steering_deg',tr('转向 · 度','Steering · degrees')),
@@ -99,20 +122,20 @@ def render_external_scan(scan, coaching, evidence, zh):
                  ('delta',tr('本窗口新增时间差 · 秒','Incremental delta · s'))]
         for name, label in names:
             if name == 'delta':
-                pairs = [(p['delta_s'], '#654478')]
+                pairs = [(shown(p['delta_s']), '#654478')]
             elif name in w['baseline_signals'] and name in p['signals']:
-                pairs = [(w['baseline_signals'][name], '#c45b25'), (p['signals'][name], '#126d82')]
+                pairs = [(shown(w['baseline_signals'][name]), '#c45b25'), (shown(p['signals'][name]), '#126d82')]
             else:
                 continue
             values = np.asarray([v for v, _ in pairs])
             lo = float(values.min())
             scale = max(float(np.ptp(values)), .01)
             pieces.append('<h3>'+label+'</h3><svg viewBox="0 0 900 190">')
-            left, right = [(g-w['grid_m'][0])/(w['grid_m'][-1]-w['grid_m'][0])*860+20
+            left, right = [(g-display_grid[0])/(display_grid[-1]-display_grid[0])*860+20
                            for g in w['core_limits_m']]
             pieces.append(f'<rect x="{left:.1f}" y="20" width="{right-left:.1f}" height="150" fill="#fff1be"/>')
             for vals, color in pairs:
-                pts=' '.join(f'{20+i/(len(vals)-1)*860:.1f},{170-(v-lo)/scale*140:.1f}' for i,v in enumerate(vals))
+                pts=' '.join(f'{20+(display_grid[i]-display_grid[0])/(display_grid[-1]-display_grid[0])*860:.1f},{170-(v-lo)/scale*140:.1f}' for i,v in enumerate(vals))
                 pieces.append('<polyline fill="none" stroke="'+color+'" stroke-width="2" points="'+pts+'"/>')
             pieces.append(f'<text x="20" y="15">{lo:.2f}–{lo+scale:.2f}</text></svg>')
         pieces.append('<details><summary>'+tr('查看样本与计算','Samples and calculations')+'</summary><p>'+tr(
