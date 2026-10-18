@@ -24,6 +24,8 @@ ttc = [
 ]
 video = [
   "opencv-python-headless>=4.10",
+  # pytesseract also needs the Tesseract binary installed on the system.
+  "pytesseract>=0.3",
 ]
 viz = [
   "matplotlib>=3.7,<4",
