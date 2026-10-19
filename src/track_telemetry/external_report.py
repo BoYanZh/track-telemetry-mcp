@@ -1,7 +1,16 @@
 """Render external scan separately from the agent's practice priority."""
+import datetime
 import html
+import re
 
 import numpy as np
+
+
+def _filename_date(name):
+    match = re.search(r"(20\d{2})(\d{2})(\d{2})", name or "")
+    if not match:
+        return None
+    return datetime.date(int(match[1]), int(match[2]), int(match[3]))
 
 
 def render_external_scan(scan, coaching, evidence, zh):
@@ -19,19 +28,31 @@ def render_external_scan(scan, coaching, evidence, zh):
     summaries = {item["window"]["id"]: item for item in candidates}
     ranked = [item["window"] for item in candidates]
     focus = [item["window"] for item in focuses]
+    coached = [w for w in ranked if w["id"] in set(scan.get("practice_ranking", []))]
+    focus = coached + [w for w in focus if w["id"] not in {x["id"] for x in coached}]
     priorities = {item["window"]["id"]: i for i, item in enumerate(focuses, 1)}
     focus_keys = {w["id"] for w in focus}
     other = [w for w in ranked if w["id"] not in focus_keys]
     pieces = ['<section id="external-scan"><h2>' + tr("高手对照：先看这几个位置", "Reference comparison: start here") + '</h2><p>' + tr(
-        "按参考车手多次快圈的典型时间差排序，合并高度重叠的区域，先展开四处；入口状态和练习动作在各处说明。",
+        f"按参考车手多次快圈的典型时间差排序，先展开{len(focus)}处；教练指定的练习位置排在最前。入口状态和练习动作在各处说明。",
         "Start with four improvement candidates. Linked differences cover entry, target and downstream acceleration; they guide opportunity assessment. Overlapping differences are not additive.") + '</p>']
     md = ['## ' + tr("高手对照：先看这几个位置", "Reference comparison: start here"), '']
+    own_date = _filename_date((evidence.get("sessions") or [{}])[0].get("summary", {}).get("source_name", ""))
+    stale = sorted({(r.get("summary", {}).get("source_name", "?"), abs((_filename_date(r.get("summary", {}).get("source_name", "")) - own_date).days))
+                    for r in scan.get("references", []) if own_date and _filename_date(r.get("summary", {}).get("source_name", ""))},
+                   key=lambda item: -item[1])
+    if stale and stale[0][1] > 180:
+        names = "、".join(f"{name}（相隔约{days}天）" for name, days in stale)
+        warning = tr(f"注意：参照与本日相隔较久（{names}），车辆、轮胎与气温可能不可比，差距数字仅供方向参考。",
+                     f"Note: the reference is much older/newer than this session ({names}); treat gaps as directional only.")
+        pieces.append('<p class="notice">' + html.escape(warning) + '</p>')
+        md += [warning, '']
 
     def table(items):
         rows = ['<table><tr><th>'+tr('位置','Location')+'</th><th>'+tr('典型关联窗口差','Typical linked difference')+'</th><th>'+tr('下节怎么练','Next-session cue')+'</th></tr>']
         for w in items:
             decision = decisions.get(w['id'])
-            state = (decision.get('cue') if decision else None) or descriptions.get(w['id'], {}).get('cue') or '—'
+            state = (decision.get('cue') if decision else None) or descriptions.get(w['id'], {}).get('cue') or tr('纳入对照，供参考', 'Listed for reference')
             rows.append(f'<tr><td><a href="#{w["id"]}">{str(priorities[w["id"]])+" · " if w["id"] in priorities else ""}S{w["sector"]:02}</a></td><td>{summaries[w["id"]]["typical_difference_s"]:+.2f} '+tr('秒','s')+'</td><td>'+html.escape(state)+'</td></tr>')
         rows.append('</table>')
         return ''.join(rows)
@@ -40,8 +61,9 @@ def render_external_scan(scan, coaching, evidence, zh):
     pieces.append('<details><summary>'+tr('排序怎么算','Ranking method')+'</summary><p>'+tr('先筛参考车手自身最快圈后max(1秒，2%)以内的候选圈，再用关联窗口差的中位数排序；优先保留至少两次更快的区域，并合并高度重叠窗口。这个筛选只表示配速相近。','Use reference pace candidates within best + max(1 s, 2%), rank median linked differences with repeated positive support, and merge overlapping windows.')+'</p></details>')
     for w in focus:
         p = summaries[w['id']]['representative']
-        state = decisions.get(w['id'], {}).get('cue') or descriptions.get(w['id'], {}).get('cue') or '—'
-        md.append(f'- S{w["sector"]:02}: '+tr('本段慢 ', 'Local difference ')+f'{p["core_difference_s"]:.2f} '+tr('秒。','s. ')+state)
+        state = decisions.get(w['id'], {}).get('cue') or descriptions.get(w['id'], {}).get('cue') or tr('纳入对照，供参考', 'Listed for reference')
+        md.append(f'- S{w["sector"]:02}: '+tr('本段慢 ', 'Local difference ')+f'{p["core_difference_s"]:.2f} '+tr('秒。','s. ')+state
+                  + tr(f'（路线与速度曲线见 report.html #{w["id"]}）', f' (see report.html #{w["id"]})'))
     pieces.append('<p>'+tr('橙色：你；蓝色：参考；浅黄：本段。','Orange: you; blue: reference; yellow: target segment.')+'</p>')
     detail_order = focus + other
     for rank, w in enumerate(detail_order):
