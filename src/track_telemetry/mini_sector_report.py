@@ -18,10 +18,10 @@ def render_mini_sectors(analysis, session_name, format_time, zh):
         "每一行是一整圈，每一列是同一个物理区段。先看每列最快来自哪圈，再看整圈最快的圈在哪些位置仍留有差异。空间参考轨迹只统一坐标，不代表每一段都最快。",
         "Rows are laps; columns are matched physical sections. Geometry reference is a coordinate system, not the performance envelope.") + '</p><table><thead><tr><th>'
         + tr("样本范围", "Scope") + '</th><th>' + tr("实测整圈最快", "Best actual lap") + '</th><th>'
-        + tr("最快区段拼接", "Virtual best") + '</th><th>' + tr("算术差值（秒）", "Arithmetic gap s") + '</th></tr></thead><tbody>']
+        + tr("各段最优拼接", "Combined sector best") + '</th><th>' + tr("拼接快多少（秒）", "Combined advantage s") + '</th></tr></thead><tbody>']
     summaries = [(tr("所有记录合并", "All recordings"), combined)] + [
         (session_name(int(index)), result) for index, result in analysis["by_session"].items()]
-    md = ["", "## " + tr("逐圈微区段与虚拟最佳圈", "Mini-sector matrix and virtual best"), ""]
+    md = ["", "## " + tr("各段最优拼接", "Combined sector best"), ""]
     for label, result in summaries:
         if "virtual_best_s" not in result:
             continue
@@ -68,6 +68,7 @@ def render_mini_sectors(analysis, session_name, format_time, zh):
     labels = [tr("区段", "Sector"), tr("最快秒数", "Best s"), tr("来源圈", "Source lap"), tr("接近最快的次数", "Near-best count"),
               tr("整圈最快在此慢多少秒", "Best lap deficit s"), tr("进入 / 离开速度", "Entry / exit km/h")]
     html_parts += [''.join(f'<th>{v}</th>' for v in labels), '</tr></thead><tbody>']
+    notable = []
     for winner in winners:
         entry, exit_ = winner["entry_speed_kmh"], winner["exit_speed_kmh"]
         speeds = f"{entry:.1f} / {exit_:.1f}" if entry is not None and exit_ is not None else "—"
@@ -76,7 +77,13 @@ def render_mini_sectors(analysis, session_name, format_time, zh):
         values = [winner["sector"], f"{winner['duration_s']:.3f}", source, winner["near_best_count"],
                   f"{deficit:.3f}" if deficit is not None else "—", speeds]
         html_parts.append('<tr>' + ''.join(f'<td>{esc(v)}</td>' for v in values) + '</tr>')
-        md.append(f"- {winner['sector']}：{winner['duration_s']:.3f} 秒 / {source}")
+        if deficit is not None and deficit > 0.1:
+            notable.append((winner, deficit, source, speeds))
+    notable.sort(key=lambda item: item[1], reverse=True)
+    for winner, deficit, source, speeds in notable[:8]:
+        md.append(f"- 区段{winner['sector']}：整圈最快在此慢 {deficit:.2f} 秒，最快来源{source}（进/出 {speeds} km/h）")
+    if len(notable) > 8:
+        md.append(f"- 其余 {len(notable) - 8} 段差距均小于上述，详见 report.html 拼接矩阵。")
     html_parts.append('</tbody></table><p class="note">' + tr(
         "接近最快指本段最快后 0.1 秒以内的不同圈样本。单次最快可能受定位和计时误差影响；这里只做核查，不把孤立最好值当成已掌握的稳定能力。局部快段可以来自整圈较慢的圈，但仍需确认驾驶意图。",
         "Near-best counts use a 0.1 s tolerance. Isolated bests require GPS/timing review; fast sections from slower laps still need intent/context confirmation.") + '</p></details></section>')

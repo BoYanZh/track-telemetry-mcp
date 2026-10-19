@@ -339,7 +339,7 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
     if reference_sessions and reference:
         from .external_screening import scan_external_references
 
-        scan = scan_external_references(sessions[reference[0]], reference[1].number, reference_sessions)
+        scan = scan_external_references(sessions[reference[0]], reference[1].number, reference_sessions, background_sessions=sessions)
         evidence["external_reference_scan"] = scan
         for window in scan["windows"]:
             evidence["observations"].append({"id": window["id"],
@@ -447,14 +447,22 @@ def finalize_debrief(evidence_path: Path, coaching: dict):
                     practice_plan=experiments, validation_plan=validation, coaching_summary=coaching["summary"])
     from .coaching_report import render_report
 
+    next_session = None
+    if coaching.get("next_session"):
+        from .next_session_report import render_next_session
+        next_session = render_next_session(coaching["next_session"], evidence)
     markdown, document = render_report(evidence, coaching)
     evidence["report_presentation"] = {key: coaching[key] for key in
                                        ("language", "title", "sections") if key in coaching}
     directory = evidence_path.parent
     (directory / "report.md").write_text(markdown, encoding="utf-8")
     (directory / "report.html").write_text(document, encoding="utf-8")
+    if next_session:
+        (directory / "next-session.md").write_text(next_session[0], encoding="utf-8")
+        (directory / "next-session.html").write_text(next_session[1], encoding="utf-8")
+        evidence["next_session"] = coaching["next_session"]
     evidence_path.write_text(json.dumps(evidence, indent=2, allow_nan=False), encoding="utf-8")
-    return {"status": evidence["status"], "report_md": str(directory / "report.md"),
+    return {"status": evidence["status"], "next_session_html": str(directory / "next-session.html") if next_session else None, "report_md": str(directory / "report.md"),
             "report_html": str(directory / "report.html")}
 
 
