@@ -105,7 +105,7 @@ def _linked_end(grid, driver_times, reference_times, core_end, driver_events, re
             endpoints.append(max(core_end, endpoint))
     return min(endpoints) if endpoints else float(grid[-1]), bool(endpoints)
 
-def scan_external_references(driver, lap_number, references, *, sectors=20):
+def scan_external_references(driver, lap_number, references, *, sectors=20, background_sessions=None):
     """Rank observed external differences; leave practice selection to the agent."""
     lap = driver.lap(lap_number)
     t, lat, lon, _ = _gps_trace(driver, lap)
@@ -126,6 +126,17 @@ def scan_external_references(driver, lap_number, references, *, sectors=20):
                 traces.append((index, session, other, et, np.c_[ex, ey]))
             except ValueError as exc:
                 exclusions.append({"reference": index, "lap": other.number, "reason": str(exc)})
+    background_traces = []
+    for session_index, session in enumerate(background_sessions or [driver]):
+        for other in session.laps:
+            if not other.is_timed:
+                continue
+            try:
+                at, alat, alon, _ = _gps_trace(session, other)
+                ax, ay = latlon_to_xy_m(alat, alon, **origin)
+                background_traces.append((session_index, other.number, at, np.c_[ax, ay]))
+            except ValueError:
+                continue
     driver_events = _brake_events(driver, lap_number)
     event_cache = {(i, other.number): _brake_events(session, other.number)
                    for i, session, other, _, _ in traces}
@@ -150,6 +161,16 @@ def scan_external_references(driver, lap_number, references, *, sectors=20):
             windows.append({"id": f"external-{sector+1:02}", "sector": sector+1,
                             "unavailable_reason": "Missing finite baseline speed"})
             continue
+        background_routes = []
+        for session_index, number, at, points in background_traces:
+            try:
+                pos, times, _ = _project_passage(points, at, base, bd)
+                sample_times = np.interp(grid, pos, times)
+                background_routes.append({"session": session_index, "lap": number,
+                    "route_xy": np.c_[np.interp(sample_times, at, points[:, 0]),
+                                      np.interp(sample_times, at, points[:, 1])].tolist()})
+            except ValueError:
+                continue
         passages, rejected = [], []
         for index, session, other, et, points in traces:
             try:
@@ -208,6 +229,7 @@ def scan_external_references(driver, lap_number, references, *, sectors=20):
                 (grid >= core[0]) & (grid <= core[1])])),
             "baseline_entry_speed_kmh": baseline["speed_kmh"][0],
             "baseline_exit_speed_kmh": baseline["speed_kmh"][-1],
+            "background_routes": background_routes,
             "passages": passages, "excluded_passages": rejected,
             "best_core_difference_s": passages[0]["core_difference_s"] if passages else None,
             "positive_passages": sum(p["core_difference_s"] > 0 for p in passages),

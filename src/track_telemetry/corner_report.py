@@ -3,6 +3,14 @@ import html
 
 import numpy as np
 
+from .speed_minima import place_label, speed_minima_indices
+
+
+def _vmins(passage):
+    samples = [s for s in passage.get("controls", {}).get("speed_kmh", {}).get("samples", [])
+               if s.get("value") is not None and np.isfinite(s["value"])]
+    return [samples[i] for i in speed_minima_indices([s["value"] for s in samples])]
+
 
 def _route_view(passages, selected, baseline, donor, label, zh, *, shape_check=None):
     points = [point for p in selected for path in p.get("gps_cause_paths", p.get("gps_core_paths", p["gps_paths"])) for point in path]
@@ -46,6 +54,22 @@ def _route_view(passages, selected, baseline, donor, label, zh, *, shape_check=N
             title = text("局部最紧处候选，30米GPS圆拟合半径约", "Local tightest candidate, 30 m GPS fit radius ~") + f"{fit['radius_m']:.0f} m"
             pieces.append(f'<circle cx="{fit["x_m"]:.3f}" cy="{-fit["y_m"]:.3f}" r="{width*.009:.3f}" '
                           f'fill="{color}" stroke="white" stroke-width="2" vector-effect="non-scaling-stroke"><title>{html.escape(title)}</title></circle>')
+    occupied = []
+    for number, p in enumerate(selected):
+        positions = p.get("gps_position_samples", [])
+        if not positions:
+            continue
+        for minimum_number, minimum in enumerate(_vmins(p), 1):
+            point = min(positions, key=lambda sample: abs(sample["time_s"]-minimum["time_s"]))
+            color = "#ba4a20" if (p["session"], p["lap"]) == baseline else "#126d82"
+            name = text("你", "You") if color == "#ba4a20" else text("参考", "Reference")
+            x, y = point["x_m"], -point["y_m"]
+            tx, ty = place_label(x+width*.015, y+width*.025*(1 if number else -1),
+                                 f'{name} Vmin{minimum_number} {minimum["value"]:.1f}', occupied,
+                                 font=width/48, bounds=(x0, y0, x0+width, y0+height))
+            pieces.append(f'<line x1="{x:.3f}" y1="{y:.3f}" x2="{tx:.3f}" y2="{ty:.3f}" stroke="{color}" vector-effect="non-scaling-stroke"/>'
+                          f'<g class="vmin-route"><circle cx="{x:.3f}" cy="{y:.3f}" r="{width*.009:.3f}" fill="{color}"/>'
+                          f'<text x="{tx:.3f}" y="{ty:.3f}" font-size="{width/48:.3f}" fill="{color}">{name} Vmin{minimum_number} {minimum["value"]:.1f}</text></g>')
     length = max(1., 10 ** np.floor(np.log10(width / 6)))
     x, y, font = x0 + width * .07, y0 + height * .93, width / 48
     pieces.append(f'<path d="M{x:.3f},{y:.3f}h{length:.3f}" stroke="#26343c" stroke-width="3" vector-effect="non-scaling-stroke"/>'
@@ -182,6 +206,16 @@ def render_corner(observation, label, zh, *, description=None):
         for value in (lower, (lower+upper)/2, upper):
             y = ordinate(value)
             pieces.append(f'<path d="M60,{y:.1f}H730" stroke="#dbe2e6"/><text x="50" y="{y+5:.1f}" text-anchor="end">{value:.2f}</text>')
+        occupied = []
+        for index, p in enumerate(selected):
+            for minimum_number, minimum in enumerate(_vmins(p), 1):
+                color = "#ba4a20" if index == 0 else "#126d82"
+                x = 60+(minimum["progress"]-lo)/(hi-lo)*670
+                name = ("你" if zh else "You") if index == 0 else ("参考" if zh else "Reference")
+                tx, ty = place_label(x+4, 40+index*18, f'{name} Vmin{minimum_number} {minimum["value"]:.1f}',
+                                     occupied, font=12., bounds=(60., 25., 755., 180.))
+                pieces.append(f'<g class="vmin-marker"><line x1="{x:.1f}" x2="{x:.1f}" y1="25" y2="185" stroke="{color}" stroke-dasharray="5 4"/>'
+                              f'<text x="{tx:.1f}" y="{ty:.1f}" fill="{color}" font-size="12">{name} Vmin{minimum_number} {minimum["value"]:.1f}</text></g>')
         for p, color in zip(selected, ("#ba4a20", "#126d82")):
             d, previous = [], None
             for time, progress, value in trace(p):

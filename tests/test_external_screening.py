@@ -52,9 +52,15 @@ def test_external_roles_do_not_replace_driver_pb_and_render_first(tmp_path):
     doc = (tmp_path/'report.html').read_text(encoding='utf-8')
     assert doc.index('id="external-scan"') < doc.index('id="track"')
     assert 'S20' in doc and oid in doc
+    assert 'class="background-lap"' in doc
+    assert doc.count('class="vmin-route"') >= 40
+    assert doc.count('class="vmin-marker"') >= 40
+    assert 'Vmin' in doc
+    assert any(w.get('background_routes') for w in e['external_reference_scan']['windows'])
     import re
-    assert len(re.findall(r'<details id="external-\d+" open>', doc)) == 4
-    assert '查看其余16段' in doc
+    opened = re.findall(r'<details id="external-\d+" open>', doc)
+    assert f'<details id="{oid}" open>' in doc
+    assert f'查看其余{20 - len(opened)}段' in doc
     assert '关联窗口差' in doc
     assert '下节怎么练' in doc
     assert '固定入口参照，记录三次出口速度。' in doc

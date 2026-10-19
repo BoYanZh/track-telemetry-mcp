@@ -181,3 +181,11 @@ Each external decision also requires `cue`: one short driver-facing sentence
 stating what to do or test next session. Render cue in the overview; keep the
 selection/deferral reason in collapsed priority notes. Ranking mechanics and
 overlap warnings are not practice instructions.
+
+### Between-session decision report
+
+The hosting agent supplies `next_session` to finalization (see
+[prompts/session_coach.md](../prompts/session_coach.md) for fields and decision rules).
+The finalizer writes `next-session.html` and `next-session.md` beside the complete
+`report.html` and `report.md`. This is a concise presentation of the same reviewed
+evidence, not a separate measurement or provider-specific LLM call.
