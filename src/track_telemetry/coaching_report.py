@@ -164,17 +164,17 @@ def render_report(evidence, coaching):
     descriptions = {item["observation_id"]: item for item in coaching.get("sections", [])}
     section_order = {key: index for index, key in enumerate(descriptions)}
     ranked_zones = sorted(zones, key=lambda z: section_order.get(z["observation"]["id"], len(descriptions)))
-    practiced = set()
+    practiced = {}
     id_to_sector = {}
     for w in evidence.get("external_reference_scan", {}).get("windows", []):
         id_to_sector[w["id"]] = w["sector"]
     for experiment in coaching.get("experiments", []):
         for key in experiment.get("observation_ids", []):
             if key in id_to_sector:
-                practiced.add(id_to_sector[key])
+                practiced[id_to_sector[key]] = "practice"
     for item in coaching.get("sections", []):
         if item.get("observation_id") in id_to_sector:
-            practiced.add(id_to_sector[item["observation_id"]])
+            practiced.setdefault(id_to_sector[item["observation_id"]], "validate")
     skipped = []
     practiced_note = []
     for zone in ranked_zones:
@@ -191,8 +191,9 @@ def render_report(evidence, coaching):
                 f"{zone['letter']} · {zone['location']}：实测区段差约 {difference:.2f} 秒，无四信号支持，本节不立项。",
                 f"{zone['letter']} · {zone['location']}: measured difference {difference:.2f} s, no diagnosis scheduled.")) + '</summary>')
             if o.get("sector") in practiced:
+                kind = "主练" if practiced[o["sector"]] == "practice" else "复测"
                 practiced_note.append(
-                    f"{zone['letter']}（S{o['sector']:02}）为本节主练同位置，不在暂缓列")
+                    f"{zone['letter']}（S{o['sector']:02}）为本节{kind}同位置，不在暂缓列")
             else:
                 skipped.append(
                     f"{zone['letter']}（S{o['sector']:02}，差约 {difference:.2f} 秒）" if o.get("sector")
