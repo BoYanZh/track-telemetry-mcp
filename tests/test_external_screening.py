@@ -53,9 +53,10 @@ def test_external_roles_do_not_replace_driver_pb_and_render_first(tmp_path):
     assert doc.index('id="external-scan"') < doc.index('id="track"')
     assert 'S20' in doc and oid in doc
     assert 'class="background-lap"' in doc
-    assert doc.count('class="vmin-route"') >= 40
-    assert doc.count('class="vmin-marker"') >= 40
+    assert doc.count('class="vmin-route"') >= 10
+    assert doc.count('class="vmin-marker"') >= 10
     assert 'Vmin' in doc
+    assert "暂缓区段只列表" in doc
     assert any(w.get('background_routes') for w in e['external_reference_scan']['windows'])
     import re
     opened = re.findall(r'<details id="external-\d+" open>', doc)

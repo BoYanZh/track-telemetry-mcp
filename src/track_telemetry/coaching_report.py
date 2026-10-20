@@ -208,11 +208,15 @@ def render_report(evidence, coaching):
         heading = description.get("title", zone["location"])
         prefix = f"{zone['letter']} · "
         show = heading[len(prefix):] if heading.startswith(prefix) else heading
-        full = o["id"] in descriptions
+        full = o["id"] in descriptions or not descriptions
         if not full:
             bodies.append('<details><summary>' + _escape(tr(
                 f"{zone['letter']} · {zone['location']}：实测区段差约 {difference:.2f} 秒，无四信号支持，本节不立项。",
-                f"{zone['letter']} · {zone['location']}: measured difference {difference:.2f} s, no diagnosis scheduled.")) + '</summary>')
+                f"{zone['letter']} · {zone['location']}: measured difference {difference:.2f} s, no diagnosis scheduled."))
+                + '</summary><p class="note">' + _escape(tr(
+                    "该区段未纳入本节练习，不生成单独的路线与曲线图；如需核对可在完整测量数据中查看。",
+                    "Not scheduled this session, so no per-zone route or trace figure is generated."))
+                + '</p></details>')
             if o.get("sector") in practiced:
                 kind = "主练" if practiced[o["sector"]] == "practice" else "复测"
                 practiced_note.append(
@@ -221,6 +225,7 @@ def render_report(evidence, coaching):
                 tag = (f"{zone['letter']}（S{o['sector']:02}，差约 {difference:.2f} 秒）" if o.get("sector")
                        else f"{zone['letter']}（差约 {difference:.2f} 秒）")
                 skipped.append((float(difference or 0.0), tag))
+            continue
         reference = o.get("section_reference", evidence["reference"])
         driver_label = _session_name(sessions[o["example_session"]], zh) + tr(f"第{o['example_lap']}圈", f" L{o['example_lap']}")
         ref_label = _session_name(sessions[reference["session"]], zh) + tr(f"第{reference['lap']}圈", f" L{reference['lap']}")
@@ -254,8 +259,7 @@ def render_report(evidence, coaching):
             confidence = {"low": tr("偏低", "low"), "moderate": tr("中等", "moderate"), "high": tr("较高", "high")}
             bodies.append('<p class="note">' + tr("原因判断的把握：", "Interpretation confidence: ")
                           + " / ".join(confidence[h["confidence"]] for h in linked) + '</p>')
-        bodies.append('<p class="note">' + tr("", "") + '</p></section>'
-                      + ('</details>' if not full else ''))
+        bodies.append('<p class="note">' + tr("", "") + '</p></section>')
         if full:
             md += ["", f"## {zone['letter']} · {show}（路线图见 report.html #zone-{zone['letter']}）", "", description.get("what_happened", ""),
                    tr(f"实测区段差约 {difference:.2f} 秒。", f"Measured section difference: {difference:.2f} s."),

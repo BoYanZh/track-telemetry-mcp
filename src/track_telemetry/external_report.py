@@ -89,9 +89,17 @@ def render_external_scan(scan, coaching, evidence, zh, *, route_only_id=None, in
         detail_order = [w for w in detail_order if w['id'] == route_only_id]
         pieces = []
         remaining = []
+    elif remaining:
+        pieces.append('<details class="external-other"><summary>'
+                      + tr(f'查看其余{len(remaining)}段', f'Other {len(remaining)} windows')
+                      + '</summary>' + table(remaining)
+                      + '<p class="note">' + tr("暂缓区段只列表，不生成路线与曲线图。",
+                                                "Deferred windows are listed only; no figures.")
+                      + '</p></details>')
     for rank, w in enumerate(detail_order):
-        if remaining and rank == len(focus):
-            pieces.append('<details class="external-other"><summary>'+tr(f'查看其余{len(remaining)}段',f'Other {len(remaining)} windows')+'</summary>'+table(remaining))
+        if not route_only_id and w['id'] not in focus_keys:
+            # Deferred windows stay in the table above; skip their figures and prose.
+            continue
         p = summaries[w['id']]['representative']
         title = (tr(f'第{rank+1}优先 · ', f'Priority {rank+1} · ') if w['id'] in focus_keys else '') + f'S{w["sector"]:02} · ' + tr(f'高手参考{p["reference"]+1}第{p["lap"]}圈', f'Reference {p["reference"]+1}, lap {p["lap"]}')
         pieces.append(f'<details id="{w["id"]}"'+(' open' if route_only_id or w['id'] in focus_keys else '')+'><summary>'+title+'</summary>')
@@ -244,8 +252,6 @@ def render_external_scan(scan, coaching, evidence, zh, *, route_only_id=None, in
                 cells.append(' / '.join(f'{v:.2f}' if v is not None else '—' for v in pair))
             pieces.append('<tr>'+''.join('<td>'+value+'</td>' for value in cells)+'</tr>')
         pieces.append('</table></details>')
-        pieces.append('</details>')
-    if remaining:
         pieces.append('</details>')
     pieces.append('</section>')
     return ''.join(pieces), md
