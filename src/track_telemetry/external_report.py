@@ -38,11 +38,14 @@ def render_external_scan(scan, coaching, evidence, zh, *, route_only_id=None, in
     pieces = ['<section id="external-scan"><h2>' + tr("高手对照：先看这几个位置", "Reference comparison: start here") + '</h2><p>' + tr(
         f"按参考车手多次快圈的典型时间差排序，先展开{len(focus)}处；教练指定的练习位置排在最前。入口状态和练习动作在各处说明。",
         "Start with four improvement candidates. Linked differences cover entry, target and downstream acceleration; they guide opportunity assessment. Overlapping differences are not additive.") + '</p>'
-              '<p class="note">' + tr("口径说明：S号是20等分物理区段，与拼接矩阵的区段号同一套；“最大单圈差”是多次参照通过中相对本日基线圈的最大值，“典型关联差”是多次通过的中位关联差。A–F是自车机会排序，括号内标注对应的S号。",
-                                     "Sectors share one 20-way physical grid with the sector matrix; largest single-lap gap is the max over reference passages, typical gap its median.") + '</p>']
+              '<p class="note">' + tr("口径说明：S号是20等分物理区段，与拼接矩阵的区段号同一套；“最大单圈差”是核心窗口内相对本日基线圈的单圈最大值，“典型关联差”是含上下游的整段关联窗口多圈中位值（窗口更大，数值可以更大）。A–F是自车机会排序，括号内标注对应的S号。",
+                                     "Sectors share one 20-way physical grid with the sector matrix; largest single-lap gap is the core-window max, typical gap the wider linked-window median.") + '</p>']
     md = ['## ' + tr("高手对照：先看这几个位置", "Reference comparison: start here"), '',
-          tr("口径：S号与拼接矩阵区段号是同一套20等分物理分段；“最大单圈差”取多次参照通过相对本日基线圈的最大值，“典型关联差”取多次通过的中位值。",
-             "Sectors share one 20-way grid with the sector matrix; largest gap is the max over reference passages, typical gap its median."), '']
+          tr("口径：S号与拼接矩阵区段号是同一套20等分物理分段；“最大单圈差”取核心窗口内相对本日基线圈的单圈最大值，"
+             "“典型关联差”取含上下游的整段关联窗口多圈中位值（窗口更大，数值可以更大，两者不是同一窗口的统计量）。",
+             "Sectors share one 20-way grid with the sector matrix; largest gap is the single-lap max in the core window, typical gap the median over the wider linked window.") + tr(
+             " 练习位置一旦选定，暂缓列中同位置条目自动移出并注记。",
+             " Practiced sectors are excluded from the deferred list."), '']
     own_date = _filename_date((evidence.get("sessions") or [{}])[0].get("summary", {}).get("source_name", ""))
     stale = sorted({(r.get("summary", {}).get("source_name", "?"), abs((_filename_date(r.get("summary", {}).get("source_name", "")) - own_date).days))
                     for r in scan.get("references", []) if own_date and _filename_date(r.get("summary", {}).get("source_name", ""))},

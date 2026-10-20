@@ -166,9 +166,6 @@ def render_report(evidence, coaching):
     ranked_zones = sorted(zones, key=lambda z: section_order.get(z["observation"]["id"], len(descriptions)))
     practiced = set()
     id_to_sector = {}
-    for o in evidence.get("observations", []):
-        if o.get("sector"):
-            id_to_sector[o["id"]] = o["sector"]
     for w in evidence.get("external_reference_scan", {}).get("windows", []):
         id_to_sector[w["id"]] = w["sector"]
     for experiment in coaching.get("experiments", []):
