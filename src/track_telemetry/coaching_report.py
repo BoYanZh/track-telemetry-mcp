@@ -223,8 +223,13 @@ def render_report(evidence, coaching):
             if not description.get("interpretation"):
                 md.extend(h["explanation"] for h in linked)
     if skipped:
-        md += ["", tr(f"本节只练最大一项，其余{len(skipped)}段暂缓：{'、'.join(skipped)}。",
-                      f"Practicing one priority zone; deferred ({len(skipped)}): {'、'.join(skipped)}."), ""]
+        names = '、'.join(skipped)
+        if coaching.get("experiments"):
+            md += ["", tr(f"本节只练最大一项，其余{len(skipped)}段暂缓：{names}。",
+                          f"Practicing one priority zone; deferred ({len(skipped)}): {names}."), ""]
+        else:
+            md += ["", tr(f"本节只复测、不立新练习，其余{len(skipped)}段暂缓：{names}。",
+                          f"Re-measurement only, no new practice; deferred ({len(skipped)}): {names}."), ""]
     bodies.append('<section><h2>' + (tr("下一节只做这些练习", "Next-session experiments") if coaching["experiments"]
                                    else tr("先验证原因", "Validate the cause first")) + '</h2>')
     md += ["", "## " + tr("下一节练习", "Next-session experiments"), ""]
@@ -245,7 +250,7 @@ def render_report(evidence, coaching):
             md.append(f"- {label}：{experiment[key]}")
         bodies.append('</dl></article>')
     bodies.append('</section><details><summary>' + tr("数据说明", "Measurement notes") + '</summary><p>' + tr(
-        "时间差用于选练习重点，理论圈时来自不同圈的分段。GPS及圆拟合描述路线形状，总G描述车辆响应。交通、轮胎和天气等背景详见测量数据。",
+        "时间差用于选练习重点，理论圈时来自不同圈的分段。GPS及圆拟合描述路线形状，总G描述车辆响应。交通、轮胎和天气等背景详见测量数据。本报告未记录轮胎、油量、气温与交通，差距数字包含这些未知因素；采样率、缺测与插值情况见 evidence.json 通道与来源信息。",
         "Time gaps guide practice priorities; the theoretical lap combines sectors from different laps. GPS fits describe route shape, and combined G describes vehicle response. Context and limitations remain in the evidence.") + '</p>')
     for hypothesis in coaching["hypotheses"]:
         if not any(key in zone_by_id for key in hypothesis["observation_ids"]):
