@@ -21,7 +21,9 @@ def render_mini_sectors(analysis, session_name, format_time, zh):
         + tr("各段最优拼接", "Combined sector best") + '</th><th>' + tr("拼接快多少（秒）", "Combined advantage s") + '</th></tr></thead><tbody>']
     summaries = [(tr("所有记录合并", "All recordings"), combined)] + [
         (session_name(int(index)), result) for index, result in analysis["by_session"].items()]
-    md = ["", "## " + tr("各段最优拼接", "Combined sector best"), ""]
+    md = ["", "## " + tr("各段最优拼接", "Combined sector best"),
+          tr("候选圈是整圈接近最快的圈；拼接可用所有有效区段（含慢圈的局部快段），两者范围不同。",
+             "Candidates are near-best whole laps; sector donors may come from slower laps."), ""]
     for label, result in summaries:
         if "virtual_best_s" not in result:
             continue

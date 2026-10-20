@@ -178,7 +178,9 @@ def render_report(evidence, coaching):
             bodies.append('<details><summary>' + _escape(tr(
                 f"{zone['letter']} · {zone['location']}：实测区段差约 {difference:.2f} 秒，无四信号支持，本节不立项。",
                 f"{zone['letter']} · {zone['location']}: measured difference {difference:.2f} s, no diagnosis scheduled.")) + '</summary>')
-            skipped.append(f"{zone['letter']}（差约 {difference:.2f} 秒）")
+            skipped.append(
+                f"{zone['letter']}（S{o['sector']:02}，差约 {difference:.2f} 秒）" if o.get("sector")
+                else f"{zone['letter']}（差约 {difference:.2f} 秒）")
         reference = o.get("section_reference", evidence["reference"])
         driver_label = _session_name(sessions[o["example_session"]], zh) + tr(f"第{o['example_lap']}圈", f" L{o['example_lap']}")
         ref_label = _session_name(sessions[reference["session"]], zh) + tr(f"第{reference['lap']}圈", f" L{reference['lap']}")
