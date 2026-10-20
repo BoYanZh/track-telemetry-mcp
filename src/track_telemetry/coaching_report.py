@@ -110,6 +110,46 @@ def _map(evidence, zones, zh, selected=None):
     return "".join(pieces)
 
 
+def _eligible_laps(evidence, zh):
+    """(label, seconds, is_best) for laps used by the pace screen."""
+    rows = []
+    for session in evidence.get("sessions", []):
+        durations = {}
+        for summary in session.get("lap_summaries", []):
+            lap = summary.get("lap") or {}
+            if lap.get("duration_s"):
+                durations[lap.get("number")] = (lap["duration_s"], lap.get("original_number", lap.get("number")))
+        for item in session.get("lap_selection", []):
+            if not item.get("coaching_eligible"):
+                continue
+            number = item.get("lap")
+            if number not in durations:
+                continue
+            seconds, original = durations[number]
+            rows.append((_session_name(session, zh) + (f"第{original}圈" if zh else f" L{original}"), seconds))
+    rows.sort(key=lambda item: item[1])
+    return rows
+
+
+def _candidate_laps(evidence, sessions, zh, tr):
+    rows = _eligible_laps(evidence, zh)
+    if not rows:
+        return ""
+    head = ('<table><thead><tr><th>' + tr("候选圈", "Lap") + '</th><th>' + tr("圈时", "Lap time")
+            + '</th></tr></thead><tbody>')
+    cells = ''.join(f'<tr><td>{html.escape(label)}</td><td>{_time(seconds)}</td></tr>' for label, seconds in rows)
+    return ('<details><summary>' + tr(f"参与筛选的候选圈（{len(rows)}圈）", f"Candidate laps ({len(rows)})")
+            + '</summary>' + head + cells + '</tbody></table></details>')
+
+
+def _candidate_laps_md(evidence, zh, tr):
+    rows = _eligible_laps(evidence, zh)
+    if not rows:
+        return []
+    text = "、".join(f"{label} {_time(seconds)}" for label, seconds in rows)
+    return ["", tr(f"候选圈（{len(rows)}圈）：{text}。", f"Candidate laps ({len(rows)}): {text}.")]
+
+
 def summarize_deferred(skipped, zh):
     """Order deferred sectors by size and collapse trivial gaps into one clause."""
     ordered = sorted(skipped, key=lambda item: item[0], reverse=True)
@@ -160,8 +200,10 @@ def render_report(evidence, coaching):
         text = tr(
             f"实际最快 {name}第{source['lap']}圈 {_time(composite['best_whole_lap_s'])}；各段最优拼接 {_time(composite['virtual_best_s'])}；拼接比实测快 {composite['arithmetic_gap_s']:.3f} 秒（不同圈的区段凑在一起，不是实际跑出来的一圈）。下面看测量细节与练习安排。",
             f"Best actual lap {_time(composite['best_whole_lap_s'])}; combined sector best {_time(composite['virtual_best_s'])}; combined sectors are {composite['arithmetic_gap_s']:.3f} s quicker on paper (never driven as one lap). Review the priority corners below.")
-        bodies.append('<section><h2>' + tr("最快圈与分段理论最佳", "Best lap versus mini-sector theoretical best") + '</h2>' + paragraphs(text) + '</section>')
+        bodies.append('<section><h2>' + tr("最快圈与分段理论最佳", "Best lap versus mini-sector theoretical best") + '</h2>' + paragraphs(text)
+                      + _candidate_laps(evidence, sessions, zh, tr) + '</section>')
         md += ["", text, ""]
+        md += _candidate_laps_md(evidence, zh, tr)
     calculation_details = ""
     mini_md = []
     if evidence.get("mini_sector_analysis"):
