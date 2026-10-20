@@ -164,7 +164,22 @@ def render_report(evidence, coaching):
     descriptions = {item["observation_id"]: item for item in coaching.get("sections", [])}
     section_order = {key: index for index, key in enumerate(descriptions)}
     ranked_zones = sorted(zones, key=lambda z: section_order.get(z["observation"]["id"], len(descriptions)))
+    practiced = set()
+    id_to_sector = {}
+    for o in evidence.get("observations", []):
+        if o.get("sector"):
+            id_to_sector[o["id"]] = o["sector"]
+    for w in evidence.get("external_reference_scan", {}).get("windows", []):
+        id_to_sector[w["id"]] = w["sector"]
+    for experiment in coaching.get("experiments", []):
+        for key in experiment.get("observation_ids", []):
+            if key in id_to_sector:
+                practiced.add(id_to_sector[key])
+    for item in coaching.get("sections", []):
+        if item.get("observation_id") in id_to_sector:
+            practiced.add(id_to_sector[item["observation_id"]])
     skipped = []
+    practiced_note = []
     for zone in ranked_zones:
         o = zone["observation"]
         difference = o.get("measured_difference_s", o.get("median_loss_s"))
@@ -178,9 +193,13 @@ def render_report(evidence, coaching):
             bodies.append('<details><summary>' + _escape(tr(
                 f"{zone['letter']} · {zone['location']}：实测区段差约 {difference:.2f} 秒，无四信号支持，本节不立项。",
                 f"{zone['letter']} · {zone['location']}: measured difference {difference:.2f} s, no diagnosis scheduled.")) + '</summary>')
-            skipped.append(
-                f"{zone['letter']}（S{o['sector']:02}，差约 {difference:.2f} 秒）" if o.get("sector")
-                else f"{zone['letter']}（差约 {difference:.2f} 秒）")
+            if o.get("sector") in practiced:
+                practiced_note.append(
+                    f"{zone['letter']}（S{o['sector']:02}）为本节主练同位置，不在暂缓列")
+            else:
+                skipped.append(
+                    f"{zone['letter']}（S{o['sector']:02}，差约 {difference:.2f} 秒）" if o.get("sector")
+                    else f"{zone['letter']}（差约 {difference:.2f} 秒）")
         reference = o.get("section_reference", evidence["reference"])
         driver_label = _session_name(sessions[o["example_session"]], zh) + tr(f"第{o['example_lap']}圈", f" L{o['example_lap']}")
         ref_label = _session_name(sessions[reference["session"]], zh) + tr(f"第{reference['lap']}圈", f" L{reference['lap']}")
@@ -224,6 +243,9 @@ def render_report(evidence, coaching):
                       if description.get(key))
             if not description.get("interpretation"):
                 md.extend(h["explanation"] for h in linked)
+    if practiced_note:
+        md += ["", tr("说明：" + "、".join(practiced_note) + "。",
+                      "Note: " + "、".join(practiced_note) + "."), ""]
     if skipped:
         names = '、'.join(skipped)
         if coaching.get("experiments"):
