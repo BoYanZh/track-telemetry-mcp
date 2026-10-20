@@ -247,11 +247,11 @@ def render_report(evidence, coaching):
     if skipped:
         names = '、'.join(skipped)
         if coaching.get("experiments"):
-            md += ["", tr(f"本节只练最大一项，其余{len(skipped)}段暂缓：{names}。",
-                          f"Practicing one priority zone; deferred ({len(skipped)}): {names}."), ""]
+            md += ["", tr(f"本节只练最大一项，自拼接机会暂缓{len(skipped)}段：{names}。",
+                          f"Practicing one priority zone; deferred own-lap sectors ({len(skipped)}): {names}."), ""]
         else:
-            md += ["", tr(f"本节只复测、不立新练习，其余{len(skipped)}段暂缓：{names}。",
-                          f"Re-measurement only, no new practice; deferred ({len(skipped)}): {names}."), ""]
+            md += ["", tr(f"本节只复测、不立新练习，自拼接机会暂缓{len(skipped)}段：{names}。",
+                          f"Re-measurement only, no new practice; deferred own-lap sectors ({len(skipped)}): {names}."), ""]
     bodies.append('<section><h2>' + (tr("下一节只做这些练习", "Next-session experiments") if coaching["experiments"]
                                    else tr("先验证原因", "Validate the cause first")) + '</h2>')
     md += ["", "## " + tr("下一节练习", "Next-session experiments"), ""]

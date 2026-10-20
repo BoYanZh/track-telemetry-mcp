@@ -32,11 +32,6 @@ def render_next_session(plan, evidence):
         local, _ = render_external_scan(evidence["external_reference_scan"], {}, evidence, zh, route_only_id=ids[0], include_speed_evidence=True)
         # The shared renderer includes the same full-track locator and local Vmin route.
         locator = local
-        from .external_screening import rank_linked_candidates
-        candidates, _ = rank_linked_candidates(evidence["external_reference_scan"])
-        item = next(item for item in candidates if item['window']['id'] == ids[0])
-        gap = item['typical_difference_s']
-        md.extend([("**关联窗口时间空间：** " if zh else "**Linked opportunity:** ")+f"{gap:.2f} s", ""])
     link = "完整报告与对照图" if zh else "Full report and figures"
     md.append(f"[{link}](report.html#{ids[0]})")
     document = ('<!doctype html><html lang="'+('zh-CN' if zh else 'en')+'"><meta charset="utf-8">'

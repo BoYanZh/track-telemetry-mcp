@@ -45,7 +45,9 @@ def render_external_scan(scan, coaching, evidence, zh, *, route_only_id=None, in
              "“典型关联差”取含上下游的整段关联窗口多圈中位值（窗口更大，数值可以更大，两者不是同一窗口的统计量）。",
              "Sectors share one 20-way grid with the sector matrix; largest gap is the single-lap max in the core window, typical gap the median over the wider linked window.") + tr(
              " 练习位置一旦选定，暂缓列中同位置条目自动移出并注记。",
-             " Practiced sectors are excluded from the deferred list."), '']
+             " Practiced sectors are excluded from the deferred list."), '',
+          tr("下表为参照差排序；文末暂缓列为自车拼接差，两榜来源不同。",
+             "Table below ranks reference gaps; the deferred list at the end ranks own-lap sector gaps."), '']
     own_date = _filename_date((evidence.get("sessions") or [{}])[0].get("summary", {}).get("source_name", ""))
     stale = sorted({(r.get("summary", {}).get("source_name", "?"), abs((_filename_date(r.get("summary", {}).get("source_name", "")) - own_date).days))
                     for r in scan.get("references", []) if own_date and _filename_date(r.get("summary", {}).get("source_name", ""))},
@@ -56,8 +58,6 @@ def render_external_scan(scan, coaching, evidence, zh, *, route_only_id=None, in
                      f"Note: the reference is much older/newer than this session ({names}); treat gaps as directional only.")
         pieces.append('<p class="notice">' + html.escape(warning) + '</p>')
         md += [warning, '']
-    md += [tr("口径：S号与拼接矩阵区段号是同一套20等分物理分段；“最大单圈差”取多次参照通过相对本日基线圈的最大值，“典型关联差”取多次通过的中位值。",
-              "Sectors share one 20-way grid with the sector matrix; largest gap is the max over reference passages, typical gap its median."), '']
 
     def table(items):
         rows = ['<table><tr><th>'+tr('位置','Location')+'</th><th>'+tr('典型关联窗口差','Typical linked difference')+'</th><th>'+tr('下节怎么练','Next-session cue')+'</th></tr>']
