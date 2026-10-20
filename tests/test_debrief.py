@@ -193,7 +193,7 @@ def test_chinese_report_has_spatial_figures_and_no_raw_field_dump(tmp_path):
     assert 'lang="zh-CN"' in document
     assert document.count('<svg ') >= 3
     assert 'href="#zone-A"' in document
-    assert "只改这一项" in document and "候选快圈" in document
+    assert "本节改动" in document and "候选快圈" in document
     assert "median_loss_s" not in document
     assert "Session and stint timing" not in document
     assert "E1 · A区走线实验（地图右方0.25–0.30段）" in document

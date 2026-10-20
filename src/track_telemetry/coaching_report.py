@@ -264,7 +264,7 @@ def render_report(evidence, coaching):
                       + (f'<p class="note">{_escape(tr("对应区段：", "Linked zone: ") + derived)}</p>' if derived and derived not in experiment["location"] else '')
                       + '<dl>')
         md += [f"### {experiment['location']}", ""]
-        for key, label in (("change", tr("只改这一项", "One change")), ("baseline", tr("当前基线", "Baseline")),
+        for key, label in (("change", tr("本节改动", "Session change")), ("baseline", tr("当前基线", "Baseline")),
                            ("success_measure", tr("怎样判断有效", "Success measure")), ("abort_condition", tr("何时停止", "Abort condition")),
                            ("re_test", tr("下次怎样复测", "Re-test"))):
             bodies.append(f'<dt>{label}</dt><dd>{_escape(experiment[key])}</dd>')
