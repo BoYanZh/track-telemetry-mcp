@@ -43,11 +43,19 @@ are nonempty strings. Choose ONE focus using expected benefit, causal clarity,
 repeatability, execution workload and consequence of error. Candidate time-gap
 ranking locates opportunities; it does not automatically choose the practice.
 
+Supply `previous_check.text` when an earlier report exists for the same layout:
+state whether the previous focus was executed and what the same-section gap did
+since. Python adds the card's section shape and baseline lap; do not restate them
+as prose and do not invent corner names from them. The section shape is geometry,
+not an official corner label.
+
+Never reference a deferred sector's figure: reports draw route and trace figures
+only for coached sectors and the focus reference windows.
+
 The short report must be readable in 30 seconds: a findable corner, one concrete
 behavior to change or hypothesis to test, fixed conditions, and a comparison over
 three comparable unobstructed passes through the linked window. Label a test as
-a test when causality is unresolved. Tie the action to observed controls, route
-and speed; replace vague “check the transition” cues with an executable trial.
+a test when causality is unresolved. Tie the action to observed controls, routeand speed; replace vague “check the transition” cues with an executable trial.
 The full report retains four candidates, figures, competing diagnoses and evidence.
 
 When prior plans and new telemetry are available, first evaluate the previous

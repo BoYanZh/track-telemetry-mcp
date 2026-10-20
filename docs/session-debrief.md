@@ -189,3 +189,23 @@ The hosting agent supplies `next_session` to finalization (see
 The finalizer writes `next-session.html` and `next-session.md` beside the complete
 `report.html` and `report.md`. This is a concise presentation of the same reviewed
 evidence, not a separate measurement or provider-specific LLM call.
+
+Python adds three fields to the card that the agent does not author, because they
+are deterministic measurements:
+
+- **section shape** — net heading change over the examined span, labelled left,
+  right, sharp, near-straight, or "corner inside or near the bounds" when a sharp
+  local turn sits in an otherwise straight window. The window's minimum speed is
+  appended. This replaces invented corner names; it does not create an official
+  corner database.
+- **baseline lap** — the lap number and time of the best whole lap, so the driver
+  and coach compare against the same recorded bytes.
+- **last practice check** — optional `previous_check` text supplied by the agent,
+  rendered above the locator in both the card and the report. Use it to say whether
+  the previous focus was executed and what changed; a difference in seconds alone
+  does not prove the action worked.
+
+Reports no longer draw per-sector route or trace figures for sectors that were not
+selected for coaching, nor for reference windows outside the focus set. Those keep
+their table row so the ranking stays auditable; draw the figures for a deferred
+sector only by selecting it.
