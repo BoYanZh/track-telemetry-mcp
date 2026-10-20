@@ -27,6 +27,9 @@ from .channels import (
     VERT_G,
     YAW_RATE_DPS,
 )
+from .corner_catalog import list_track_layouts as catalog_layouts
+from .corner_catalog import locate_section as locate_corner_section
+from .corner_catalog import match_lap as match_corner_lap
 from .geometry import latlon_to_xy_m
 from .gg import analyze_gg_usage as gg_metrics
 from .incidents import analyze_incident as incident_metrics
@@ -458,6 +461,30 @@ def analyze_lap(path: str, lap_number: int) -> dict[str, Any]:
 
 
 @mcp.tool()
+def list_track_layouts() -> dict[str, Any]:
+    """List built-in owner-reviewed track layouts and official corner identities.
+
+    The catalog names positions, not driver errors. Unobserved alternate routes
+    are inventory only and are never silently assigned to a measured lap.
+    """
+    return catalog_layouts()
+
+
+@mcp.tool()
+def locate_track_corners(
+    path: str, lap_number: int, layout_id: str | None = None,
+) -> dict[str, Any]:
+    """Match a timed lap's real GPS geometry to reviewed layouts and corner names.
+
+    Returns official corner identities and matched per-lap positions only after
+    geographic, direction, branch and route-quality checks. A layout hint cannot
+    bypass failed geometry or ambiguity. This does not identify a driving fault,
+    prove a curb apex, or authorize comparisons of incompatible layouts.
+    """
+    return match_corner_lap(_load(path), lap_number, layout_id=layout_id)
+
+
+@mcp.tool()
 def analyze_section(
     path: str,
     lap_number: int,
@@ -470,7 +497,11 @@ def analyze_section(
     speed, and a timed lap. start_progress/end_progress are lap fractions, not named
     corners. Do not compare different layouts by matching the same progress values.
     """
-    return section_metrics(_load(path), lap_number, start_progress, end_progress)
+    session = _load(path)
+    result = section_metrics(session, lap_number, start_progress, end_progress)
+    match = match_corner_lap(session, lap_number)
+    result["corner_location"] = locate_corner_section(match, start_progress, end_progress)
+    return result
 
 
 @mcp.tool()
@@ -595,8 +626,20 @@ def compare_reference_laps(
     Positive delta means driver slower. Confirm layout independently. Vehicle,
     tires and conditions remain confounders; optional G metrics fail independently.
     """
-    return reference_metrics(_load(driver_path), driver_lap, _load(reference_path), reference_lap,
-                             same_layout_confirmed=same_layout_confirmed, mini_sectors=mini_sectors)
+    driver, reference = _load(driver_path), _load(reference_path)
+    result = reference_metrics(driver, driver_lap, reference, reference_lap,
+                               same_layout_confirmed=same_layout_confirmed,
+                               mini_sectors=mini_sectors)
+    return _name_comparison_sections(result, reference, reference_lap)
+
+
+def _name_comparison_sections(result: dict, reference: TelemetrySession, lap: int) -> dict:
+    match = match_corner_lap(reference, lap)
+    result["track_location"] = match
+    for sector in result["mini_sectors"]:
+        sector["corner_location"] = locate_corner_section(
+            match, sector["start_progress"], sector["end_progress"])
+    return result
 
 
 @mcp.tool()
@@ -616,16 +659,18 @@ def compare_laps(
     Set include_profile=true to receive sampled delta T / delta V curves.
     Comparisons fail closed when GPS alignment quality is inadequate.
     """
-    return compare_lap_data(
-        _load(path_a),
+    session_a, session_b = _load(path_a), _load(path_b)
+    result = compare_lap_data(
+        session_a,
         lap_a,
-        _load(path_b),
+        session_b,
         lap_b,
         same_layout_confirmed=same_layout_confirmed,
         mini_sectors=mini_sectors,
         include_profile=include_profile,
         profile_points=profile_points,
     )
+    return _name_comparison_sections(result, session_b, lap_b)
 
 
 @mcp.tool()
@@ -800,6 +845,8 @@ def analyze_session_debrief(
     result["status"] = evidence["status"]
     result["agent_instructions"] = evidence["agent_instructions"]
     result["reference"] = evidence["reference"]
+    result["track_location"] = evidence.get("track_location", {
+        "status": "unavailable", "reason": "No matchable reference lap"})
     if "mini_sector_analysis" in evidence:
         result["mini_sector_summary"] = evidence["mini_sector_analysis"]["combined"]
     result["external_reference_ranking"] = evidence.get("external_reference_scan", {}).get(

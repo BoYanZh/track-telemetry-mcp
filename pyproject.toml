@@ -51,7 +51,7 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-track_telemetry = ["templates/*.html"]
+track_telemetry = ["templates/*.html", "data/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

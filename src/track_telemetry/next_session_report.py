@@ -2,7 +2,7 @@
 import html
 import re
 
-from .coaching_report import _map
+from .coaching_report import _map, _official_corner_label
 
 _SECTOR_TOKEN = re.compile(r"(?<![A-Za-z0-9])S(\d)(?!\d)")
 
@@ -25,6 +25,17 @@ def _baseline_sentence(evidence, zh):
             if zh else f"Same physical section of today's best lap {lap} ({formatted}).")
 
 
+def _linked_official_corners(ids, observations, windows):
+    labels = []
+    for key in ids:
+        for item in (observations.get(key), windows.get(key)):
+            if item:
+                label = _official_corner_label(item.get("corner_location"))
+                if label and label not in labels:
+                    labels.append(label)
+    return labels
+
+
 def render_next_session(plan, evidence):
     fields = ("location", "why", "action", "keep_fixed", "success", "abort", "review_next")
     if any(not isinstance(plan.get(key), str) or not plan[key].strip() for key in fields):
@@ -35,6 +46,7 @@ def render_next_session(plan, evidence):
     if not ids or any(key not in windows and key not in observations for key in ids):
         raise ValueError("next_session requires known observation_ids")
     zh = plan.get("language", "zh").startswith("zh")
+    official_corners = _linked_official_corners(ids, observations, windows)
     labels = ("位置", "为什么先练这里", "本节只试这一件事", "保持不变", "怎样算有效", "何时恢复原走法", "下次先检查") if zh else (
         "Location", "Why this focus", "One change", "Keep fixed", "Success", "Abort", "Review next")
     title = "下一节练什么" if zh else "Next-session focus"
@@ -42,6 +54,9 @@ def render_next_session(plan, evidence):
     body = []
     for key, label in zip(fields, labels):
         value = _normalize_sectors(plan[key])
+        if key == "location" and official_corners:
+            corner_prefix = "正式弯道" if zh else "Official corner"
+            value += f" · {corner_prefix}: {', '.join(official_corners)}"
         md.extend([f"**{label}：** {value}", ""])
         body.append(f"<h2>{label}</h2><p>{html.escape(value)}</p>")
     zones = [{"letter": f'S{windows[key]["sector"]:02}', "lo": windows[key]["start_progress"],

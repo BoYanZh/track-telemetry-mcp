@@ -64,6 +64,35 @@ Unavailable metrics retain reasons rather than zero values.
 
 ## Artifacts and completion
 
+### Official corner locations
+
+The package includes the owner-reviewed NorCal corner catalog from 2026-10-20:
+Thunderhill East Bypass/Cyclone, Thunderhill West, Sonoma, Laguna Seca,
+Buttonwillow Classic 13CW/1A CCW/25CCW and The Circuit.
+`list_track_layouts` lists its coverage. `locate_track_corners(path, lap_number)`
+matches a recorded lap and returns the layout, quality and official locations.
+An optional `layout_id` supplies context; it cannot override failed geometry gates.
+
+Matching uses GPS position, route shape, travel direction and branch evidence.
+It maps fixed spatial references onto the recorded lap, then uses reference-lap
+progress to name measured intervals. Raw distance or normalized progress from
+different recordings is not a corner identity. Thunderhill East layouts share
+spatial references; Cyclone adds T5. Drag Strip is mutually exclusive with Phil
+Hill and remains unobserved in the bundled Classic recordings.
+
+Debrief evidence exposes `track_location`; observations expose `corner_location`.
+Comparison mini-sectors and `analyze_section` also include `corner_location`.
+Reports retain authored findings and add matched official names. Unknown layouts,
+missing GPS, wrong directions and ambiguous branches keep explicit unavailable
+or ambiguous results. Location matching does not authorize cross-layout timing
+comparisons or establish a driver-error cause. Existing comparison gates apply.
+
+Refresh the bundled resource from a newly reviewed library with
+`python tools/import_corner_catalog.py --source ../TrackTelemetryConverter/data/corner_db/v3`.
+Run `python tools/verify_corner_catalog.py --source ../TrackTelemetryConverter/data/corner_db/v3`
+with the local source recordings available to validate reference and held-out laps.
+The installed package does not need that checkout or those recordings.
+
 - report.md and report.html contain measured findings and an initial baseline plan.
   Final reports include per-stint timing tables, including recorded stints with
   no timed laps, and HTML figures that can be read alongside the coaching plan.

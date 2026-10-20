@@ -5,6 +5,7 @@ import re
 
 import numpy as np
 
+from .coaching_report import _official_corner_label
 from .speed_minima import place_label, speed_minima_indices
 
 
@@ -13,6 +14,12 @@ def _filename_date(name):
     if not match:
         return None
     return datetime.date(int(match[1]), int(match[2]), int(match[3]))
+
+
+def _window_location(window):
+    sector = f"S{window['sector']:02}"
+    corner = _official_corner_label(window.get("corner_location"))
+    return f"{sector} · {corner}" if corner else sector
 
 
 def render_external_scan(scan, coaching, evidence, zh, *, route_only_id=None, include_speed_evidence=False):
@@ -64,7 +71,7 @@ def render_external_scan(scan, coaching, evidence, zh, *, route_only_id=None, in
         for w in items:
             decision = decisions.get(w['id'])
             state = (decision.get('cue') if decision else None) or descriptions.get(w['id'], {}).get('cue') or tr('纳入对照，供参考', 'Listed for reference')
-            rows.append(f'<tr><td><a href="#{w["id"]}">{str(priorities[w["id"]])+" · " if w["id"] in priorities else ""}S{w["sector"]:02}</a></td><td>{summaries[w["id"]]["typical_difference_s"]:+.2f} '+tr('秒','s')+'</td><td>'+html.escape(state)+'</td></tr>')
+            rows.append(f'<tr><td><a href="#{w["id"]}">{str(priorities[w["id"]])+" · " if w["id"] in priorities else ""}{html.escape(_window_location(w))}</a></td><td>{summaries[w["id"]]["typical_difference_s"]:+.2f} '+tr('秒','s')+'</td><td>'+html.escape(state)+'</td></tr>')
         rows.append('</table>')
         return ''.join(rows)
 
@@ -77,7 +84,7 @@ def render_external_scan(scan, coaching, evidence, zh, *, route_only_id=None, in
                      for o in evidence.get("observations", []) if o.get("id") == w["id"]), None)
         gap = f'{best:.2f} ' if best is not None else ''
         state = decisions.get(w['id'], {}).get('cue') or descriptions.get(w['id'], {}).get('cue') or tr('纳入对照，供参考', 'Listed for reference')
-        md.append(f'- S{w["sector"]:02}: '+tr('本段最大单圈慢 ', 'Largest single-lap local difference ')+gap
+        md.append(f'- {_window_location(w)}: '+tr('本段最大单圈慢 ', 'Largest single-lap local difference ')+gap
                   +tr('秒（典型关联差 ', 's (typical linked ')+f'{typical:.2f} '+tr('秒', 's')
                   +tr(f'；最大差来自参照第{p["lap"]}圈', f'; largest from reference lap {p["lap"]}')+tr('）。', '). ')+state
                   + tr(f'（路线与速度曲线见 report.html #{w["id"]}）', f' (see report.html #{w["id"]})'))
@@ -101,8 +108,8 @@ def render_external_scan(scan, coaching, evidence, zh, *, route_only_id=None, in
             # Deferred windows stay in the table above; skip their figures and prose.
             continue
         p = summaries[w['id']]['representative']
-        title = (tr(f'第{rank+1}优先 · ', f'Priority {rank+1} · ') if w['id'] in focus_keys else '') + f'S{w["sector"]:02} · ' + tr(f'高手参考{p["reference"]+1}第{p["lap"]}圈', f'Reference {p["reference"]+1}, lap {p["lap"]}')
-        pieces.append(f'<details id="{w["id"]}"'+(' open' if route_only_id or w['id'] in focus_keys else '')+'><summary>'+title+'</summary>')
+        title = (tr(f'第{rank+1}优先 · ', f'Priority {rank+1} · ') if w['id'] in focus_keys else '') + _window_location(w) + ' · ' + tr(f'高手参考{p["reference"]+1}第{p["lap"]}圈', f'Reference {p["reference"]+1}, lap {p["lap"]}')
+        pieces.append(f'<details id="{w["id"]}"'+(' open' if route_only_id or w['id'] in focus_keys else '')+'><summary>'+html.escape(title)+'</summary>')
         zone = {"letter": f'S{w["sector"]:02}', "lo": w["start_progress"], "hi": w["end_progress"], "color": "#126d82"}
         pieces.append(_map(evidence, [zone], zh))
         original_grid = np.asarray(w['grid_m'])

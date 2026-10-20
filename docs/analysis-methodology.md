@@ -46,6 +46,13 @@ not simply the three largest single-sector gaps.
 
 Exit: candidate locations, source laps, repeated support and exclusions.
 
+Use `corner_location.label` to name a matched finding in the narrative, retaining
+its sector ID for traceability. `evidence.track_location` records the GPS layout
+match on the actual reference lap. When matching is ambiguous or unavailable,
+report the sector/progress bounds and its reason rather than guessing a corner.
+Corner names locate evidence; determine the cause from the complete linked window.
+See `session-debrief.md` for the built-in catalog and matching contract.
+
 ## 3. Measure the complete linked window
 
 Trace the preceding corner through the target into subsequent acceleration and

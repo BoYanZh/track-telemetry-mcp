@@ -27,6 +27,15 @@ def _escape(value):
     return html.escape(str(value), quote=True)
 
 
+def _official_corner_label(value):
+    """Return a name only when the catalog resolved the physical interval."""
+    if (not isinstance(value, dict) or value.get("status") != "matched"
+            or value.get("role") != "location_only"):
+        return None
+    label = value.get("label")
+    return label.strip() if isinstance(label, str) and label.strip() else None
+
+
 def _time(value):
     if value is None:
         return "—"
@@ -63,7 +72,9 @@ def _zones(evidence, zh):
                 location = ("地图中央" if horizontal == "中" and not vertical else
                             f"地图{horizontal}侧" if not vertical else f"地图{horizontal}{vertical}方") if zh else "Highlighted GPS section"
         location = f"{location}{span}"
-        zones.append({"letter": observation.get("map_letter", chr(65 + index)), "location": location, "lo": lo, "hi": hi,
+        zones.append({"letter": observation.get("map_letter", chr(65 + index)), "location": location,
+                      "corner_label": _official_corner_label(observation.get("corner_location")),
+                      "lo": lo, "hi": hi,
                       "observation": observation, "color": ("#ba4a20", "#126d82", "#74529a")[index % 3]})
     return zones
 
@@ -252,9 +263,11 @@ def render_report(evidence, coaching):
         show = heading[len(prefix):] if heading.startswith(prefix) else heading
         full = o["id"] in descriptions or not descriptions
         if not full:
+            corner_note = (f" · {tr('正式弯道', 'Official corner')}: {zone['corner_label']}"
+                           if zone.get("corner_label") else "")
             bodies.append('<details><summary>' + _escape(tr(
-                f"{zone['letter']} · {zone['location']}：实测区段差约 {difference:.2f} 秒，无四信号支持，本节不立项。",
-                f"{zone['letter']} · {zone['location']}: measured difference {difference:.2f} s, no diagnosis scheduled."))
+                f"{zone['letter']} · {zone['location']}{corner_note}：实测区段差约 {difference:.2f} 秒，无四信号支持，本节不立项。",
+                f"{zone['letter']} · {zone['location']}{corner_note}: measured difference {difference:.2f} s, no diagnosis scheduled."))
                 + '</summary><p class="note">' + _escape(tr(
                     "该区段未纳入本节练习，不生成单独的路线与曲线图；如需核对可在完整测量数据中查看。",
                     "Not scheduled this session, so no per-zone route or trace figure is generated."))
@@ -273,7 +286,9 @@ def render_report(evidence, coaching):
         ref_label = _session_name(sessions[reference["session"]], zh) + tr(f"第{reference['lap']}圈", f" L{reference['lap']}")
         bodies.append(f'<section class="zone" id="zone-{zone["letter"]}" style="--zone:{zone["color"]}">'
                       f'<h2><span class="letter">{zone["letter"]}</span>{_escape(show)}</h2>'
-                      '<div class="zone-layout"><div>' + _map(evidence, zones, zh, zone["letter"])
+                      + (f'<p class="corner-location"><strong>{tr("正式弯道：", "Official corner: ")}</strong>'
+                         f'{_escape(zone["corner_label"])}</p>' if zone.get("corner_label") else '')
+                      + '<div class="zone-layout"><div>' + _map(evidence, zones, zh, zone["letter"])
                       + '</div><div><p class="finding">' + tr(
                           f"本段两圈实测钟差约 {difference:.2f} 秒" if composite else f"候选样本的中位差约 {difference:.2f} 秒",
                           f"Measured two-lap difference: {difference:.2f} s" if composite else f"Median candidate difference: {difference:.2f} s") + '</p>'
@@ -303,7 +318,10 @@ def render_report(evidence, coaching):
                           + " / ".join(confidence[h["confidence"]] for h in linked) + '</p>')
         bodies.append('<p class="note">' + tr("", "") + '</p></section>')
         if full:
-            md += ["", f"## {zone['letter']} · {show}（路线图见 report.html #zone-{zone['letter']}）", "", description.get("what_happened", ""),
+            md += ["", f"## {zone['letter']} · {show}（路线图见 report.html #zone-{zone['letter']}）", ""]
+            if zone.get("corner_label"):
+                md += [f"**{tr('正式弯道', 'Official corner')}: {zone['corner_label']}**", ""]
+            md += [description.get("what_happened", ""),
                    tr(f"实测区段差约 {difference:.2f} 秒。", f"Measured section difference: {difference:.2f} s."),
                    description.get("interpretation", ""), description.get("cue", ""), description.get("watch_out", "")]
             md.extend(description[key] for key in ("line_analysis", "braking_analysis", "steering_analysis", "power_analysis", "g_analysis")
@@ -329,7 +347,10 @@ def render_report(evidence, coaching):
         md += [coaching["validation_plan"], ""]
     for experiment in coaching["experiments"]:
         located = [zone_by_id[key] for key in experiment["observation_ids"] if key in zone_by_id]
-        derived = " / ".join(f"{z['letter']} · {z['location']}" for z in located)
+        derived = " / ".join(
+            f"{z['letter']} · {z['location']}" +
+            (f" · {tr('正式弯道', 'Official corner')}: {z['corner_label']}" if z.get("corner_label") else "")
+            for z in located)
         bodies.append(f'<article class="practice"><h3>{_escape(experiment["location"])}</h3>'
                       + (f'<p class="note">{_escape(tr("对应区段：", "Linked zone: ") + derived)}</p>' if derived and derived not in experiment["location"] else '')
                       + '<dl>')

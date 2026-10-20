@@ -71,6 +71,51 @@ def _attempt(fn, *args, **kwargs):
         return {"unavailable_reason": str(exc)}
 
 
+def _match_track_location(session, lap_number):
+    """Attach official layout identity when the GPS matcher can establish it."""
+    try:
+        from .corner_catalog import match_lap
+    except ImportError as exc:
+        return {"status": "unavailable", "reason": str(exc)}
+    try:
+        match = match_lap(session, lap_number)
+    except (KeyError, ValueError) as exc:
+        return {"status": "unavailable", "reason": str(exc)}
+    if not isinstance(match, dict):
+        return {"status": "unavailable", "reason": "Corner matcher returned no structured result"}
+    return match
+
+
+def _locate_corner_section(match, start_progress, end_progress):
+    """Resolve an interval only against a successfully matched reference lap."""
+    if not isinstance(match, dict) or match.get("status") != "matched":
+        return None
+    try:
+        from .corner_catalog import locate_section
+    except ImportError as exc:
+        return {"status": "unresolved", "reason": str(exc)}
+    try:
+        location = locate_section(match, start_progress, end_progress)
+    except (KeyError, ValueError) as exc:
+        return {"status": "unresolved", "reason": str(exc)}
+    if not isinstance(location, dict):
+        return {"status": "unresolved", "reason": "Corner matcher returned no structured result"}
+    return location
+
+
+def _attach_corner_locations(items, track_location, *, interval_keys):
+    """Resolve report intervals on the already-matched driver reference lap."""
+    if not isinstance(track_location, dict) or track_location.get("status") != "matched":
+        return
+    for item in items:
+        start = item.get(interval_keys[0])
+        end = item.get(interval_keys[1])
+        if isinstance(start, (int, float, np.floating)) and isinstance(end, (int, float, np.floating)):
+            location = _locate_corner_section(track_location, float(start), float(end))
+            if location is not None:
+                item["corner_location"] = location
+
+
 def _clean(value):
     if isinstance(value, dict):
         return {str(k): _clean(v) for k, v in value.items()}
@@ -233,6 +278,8 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
                              "selection": "Fastest externally confirmed push lap if supplied; otherwise fastest pace candidate with valid GPS. Clean status unverified."}
                              if reference else None)
     if reference:
+        evidence["track_location"] = _match_track_location(
+            sessions[reference[0]], reference[1].number)
         from .coaching_report import reference_geometry
 
         evidence["reference_geometry"] = _attempt(reference_geometry, sessions[reference[0]],
@@ -279,6 +326,10 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
         for rank, observation in enumerate(profiles):
             observation["map_letter"] = chr(65 + rank)
             profile = observation["physical_section_profile"]
+            location = _locate_corner_section(
+                evidence.get("track_location"), profile[0]["progress"], profile[-1]["progress"])
+            if location is not None:
+                observation["corner_location"] = location
             donor = observation["section_reference"]
             observation["corner_passages"] = _attempt(
                 measure_passages, sessions, observation, comparisons, self_comparison, ri,
@@ -341,6 +392,8 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
 
         scan = scan_external_references(sessions[reference[0]], reference[1].number, reference_sessions, background_sessions=sessions)
         evidence["external_reference_scan"] = scan
+        _attach_corner_locations(scan.get("windows", []), evidence.get("track_location"),
+                                 interval_keys=("start_progress", "end_progress"))
         for window in scan["windows"]:
             evidence["observations"].append({"id": window["id"],
                 "measured": "Independent external local-window difference, not practice priority",
@@ -360,8 +413,13 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
     for obs in evidence["observations"]:
         if "sector" not in obs:
             continue
+        corner_location = obs.get("corner_location") or {}
+        corner_label = (corner_location.get("label")
+                        if corner_location.get("status") == "matched"
+                        and corner_location.get("role") == "location_only" else None)
+        official = f" · {corner_label}" if isinstance(corner_label, str) and corner_label.strip() else ""
         lines.append(f"- {obs['id']}: zone {obs.get('map_letter', '?')} (sector {obs['sector']}), best-lap section deficit "
-                     f"{obs['measured_difference_s']:.3f} s, confidence {obs['confidence']}.")
+                     f"{obs['measured_difference_s']:.3f} s{official}, confidence {obs['confidence']}.")
     lines += ["", "## Hypotheses and uncertainty", "", *CONFOUNDERS,
               "No driver-causation hypothesis has been established automatically.",
               "", "## Next-session practice plan", ""]

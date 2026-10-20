@@ -18,3 +18,4 @@ build/
 .local-debrief*/
 
 .local-reference*/
+.local-corner-validation/

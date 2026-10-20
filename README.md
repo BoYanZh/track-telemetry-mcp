@@ -165,6 +165,8 @@ Treat video-derived telemetry as approximate pseudo telemetry.
 | `inspect_session` | detailed metadata, channels, sample rates | use when evidence quality matters |
 | `list_laps` | all-stint lap list including original numbers and stint indices | optional after `prepare_session` |
 | `analyze_lap` | whole-lap summary | timed lap required |
+| `list_track_layouts` | reviewed official corner coverage for 9 NorCal layouts | unobserved alternative routes remain explicit |
+| `locate_track_corners` | GPS layout identification and official corner locations for a lap | shape, direction and branch gates; ambiguity stays unresolved |
 | `analyze_section` | entry/minimum/exit + braking/steering/power event timeline | normalized distance within one layout; threshold-based timing |
 | `compare_laps` | physical-position-aligned mini-sectors; optional sampled Delta T/V profile | same physical layout must be confirmed; GPS alignment must pass quality guards |
 | `render_lap_comparison` | P1 GPS trajectory overlay, speed vs reference distance, cumulative Delta T | requires same layout, GPS alignment and `viz` dependency; outputs HTML + PNG |
