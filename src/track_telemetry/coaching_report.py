@@ -135,7 +135,7 @@ def render_report(evidence, coaching):
         source = composite["best_whole_lap_source"]
         name = _session_name(sessions[source["session"]], zh)
         text = tr(
-            f"实际最快 {name}第{source['lap']}圈 {_time(composite['best_whole_lap_s'])}；各段最优拼接 {_time(composite['virtual_best_s'])}；拼接比实测快 {composite['arithmetic_gap_s']:.3f} 秒（不同圈的区段凑在一起，不是实际跑出来的一圈）。下面看下一节最值得练的弯区。",
+            f"实际最快 {name}第{source['lap']}圈 {_time(composite['best_whole_lap_s'])}；各段最优拼接 {_time(composite['virtual_best_s'])}；拼接比实测快 {composite['arithmetic_gap_s']:.3f} 秒（不同圈的区段凑在一起，不是实际跑出来的一圈）。下面看测量细节与练习安排。",
             f"Best actual lap {_time(composite['best_whole_lap_s'])}; combined sector best {_time(composite['virtual_best_s'])}; combined sectors are {composite['arithmetic_gap_s']:.3f} s quicker on paper (never driven as one lap). Review the priority corners below.")
         bodies.append('<section><h2>' + tr("最快圈与分段理论最佳", "Best lap versus mini-sector theoretical best") + '</h2>' + paragraphs(text) + '</section>')
         md += ["", text, ""]

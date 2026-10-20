@@ -64,8 +64,11 @@ def render_external_scan(scan, coaching, evidence, zh, *, route_only_id=None, in
     for w in focus:
         p = summaries[w['id']]['representative']
         typical = summaries[w['id']]['typical_difference_s']
+        best = next((o.get("values", {}).get("best_core_difference_s")
+                     for o in evidence.get("observations", []) if o.get("id") == w["id"]), None)
+        gap = f'{best:.2f} ' if best is not None else ''
         state = decisions.get(w['id'], {}).get('cue') or descriptions.get(w['id'], {}).get('cue') or tr('纳入对照，供参考', 'Listed for reference')
-        md.append(f'- S{w["sector"]:02}: '+tr('本段最大单圈慢 ', 'Largest single-lap local difference ')+f'{p["core_difference_s"]:.2f} '
+        md.append(f'- S{w["sector"]:02}: '+tr('本段最大单圈慢 ', 'Largest single-lap local difference ')+gap
                   +tr('秒（典型关联差 ', 's (typical linked ')+f'{typical:.2f} '+tr('秒）。','s). ')+state
                   + tr(f'（路线与速度曲线见 report.html #{w["id"]}）', f' (see report.html #{w["id"]})'))
     pieces.append('<p>'+tr('橙色：你；蓝色：参考；灰色：其它圈路线；浅黄：本段。','Orange: you; blue: reference; yellow: target segment.')+'</p>')
