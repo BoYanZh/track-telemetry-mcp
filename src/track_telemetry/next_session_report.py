@@ -1,7 +1,15 @@
 """Render agent-authored practice decisions; Python does not invent coaching."""
 import html
+import re
 
 from .coaching_report import _map
+
+_SECTOR_TOKEN = re.compile(r"(?<![A-Za-z0-9])S(\d)(?!\d)")
+
+
+def _normalize_sectors(text):
+    """Render sector identifiers with two digits so S5 and S05 never mix."""
+    return _SECTOR_TOKEN.sub(r"S0\1", text)
 
 
 def _baseline_sentence(evidence, zh):
@@ -33,7 +41,7 @@ def render_next_session(plan, evidence):
     md = ["# " + title, ""]
     body = []
     for key, label in zip(fields, labels):
-        value = plan[key]
+        value = _normalize_sectors(plan[key])
         md.extend([f"**{label}：** {value}", ""])
         body.append(f"<h2>{label}</h2><p>{html.escape(value)}</p>")
     zones = [{"letter": f'S{windows[key]["sector"]:02}', "lo": windows[key]["start_progress"],
@@ -71,6 +79,7 @@ def render_next_session(plan, evidence):
     previous_html = ""
     if isinstance(previous_text, str) and previous_text.strip():
         label = "上次练习回顾" if zh else "Last practice check"
+        previous_text = _normalize_sectors(previous_text)
         md.append(f"**{label}：** {previous_text}")
         md.append("")
         previous_html = f"<h2>{label}</h2><p>{html.escape(previous_text)}</p>"
