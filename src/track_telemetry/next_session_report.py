@@ -25,6 +25,19 @@ def render_next_session(plan, evidence):
         body.append(f"<h2>{label}</h2><p>{html.escape(value)}</p>")
     zones = [{"letter": f'S{windows[key]["sector"]:02}', "lo": windows[key]["start_progress"],
               "hi": windows[key]["end_progress"], "color": "#126d82"} for key in ids if key in windows]
+    shape_note = ""
+    if ids[0] in windows:
+        from .section_shape import shape_sentence
+
+        window = windows[ids[0]]
+        points = (evidence.get("reference_geometry") or {}).get("points", [])
+        shape_note = shape_sentence(points, window["start_progress"], window["end_progress"],
+                                    window.get("baseline_core_min_speed_kmh"), zh)
+    if shape_note:
+        label = "区段形态" if zh else "Section shape"
+        md.insert(4, f"**{label}：** {shape_note}")
+        md.insert(5, "")
+        body.insert(1, f"<h2>{label}</h2><p>{html.escape(shape_note)}</p>")
     locator = _map(evidence, zones, zh) if zones else ""
     local = ""
     if ids[0] in windows:
