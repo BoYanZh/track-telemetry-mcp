@@ -78,8 +78,11 @@ def render_external_scan(scan, coaching, evidence, zh, *, route_only_id=None, in
         gap = f'{best:.2f} ' if best is not None else ''
         state = decisions.get(w['id'], {}).get('cue') or descriptions.get(w['id'], {}).get('cue') or tr('纳入对照，供参考', 'Listed for reference')
         md.append(f'- S{w["sector"]:02}: '+tr('本段最大单圈慢 ', 'Largest single-lap local difference ')+gap
-                  +tr('秒（典型关联差 ', 's (typical linked ')+f'{typical:.2f} '+tr('秒）。','s). ')+state
+                  +tr('秒（典型关联差 ', 's (typical linked ')+f'{typical:.2f} '+tr('秒', 's')
+                  +tr(f'；最大差来自参照第{p["lap"]}圈', f'; largest from reference lap {p["lap"]}')+tr('）。', '). ')+state
                   + tr(f'（路线与速度曲线见 report.html #{w["id"]}）', f' (see report.html #{w["id"]})'))
+    md.append(tr("下表首行为本节选定位置，其余按关联中位差排序。",
+                "First row is the coached focus; the rest follow linked-median order."))
     pieces.append('<p>'+tr('橙色：你；蓝色：参考；灰色：其它圈路线；浅黄：本段。','Orange: you; blue: reference; yellow: target segment.')+'</p>')
     detail_order = focus + remaining
     if route_only_id:
