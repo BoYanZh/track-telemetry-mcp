@@ -41,3 +41,18 @@ def test_missing_previous_check_renders_nothing_extra():
 def test_blank_previous_check_is_ignored():
     md, _ = render_next_session(_plan(previous_check={"text": "   "}), _evidence())
     assert "上次练习回顾" not in md
+
+
+def test_baseline_lap_named_in_markdown_and_html():
+    evidence = _evidence()
+    evidence["mini_sector_analysis"] = {"combined": {
+        "best_whole_lap_source": {"session": 0, "lap": 12}, "best_whole_lap_s": 144.385}}
+    md, doc = render_next_session(_plan(), evidence)
+    assert "对照基准" in md and "第12圈" in md and "2:24.385" in md
+    assert "对照基准" in doc and "2:24.385" in doc
+
+
+def test_baseline_absent_without_composite():
+    md, _ = render_next_session(_plan(), _evidence())
+    assert "对照基准" not in md
+

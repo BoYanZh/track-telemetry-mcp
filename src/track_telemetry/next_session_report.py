@@ -4,6 +4,19 @@ import html
 from .coaching_report import _map
 
 
+def _baseline_sentence(evidence, zh):
+    """Name the lap whose sector times are the comparison baseline."""
+    combined = (evidence.get("mini_sector_analysis") or {}).get("combined") or {}
+    source = combined.get("best_whole_lap_source") or {}
+    lap, seconds = source.get("lap"), combined.get("best_whole_lap_s")
+    if lap is None or seconds is None:
+        return ""
+    minutes, rest = divmod(float(seconds), 60.0)
+    formatted = f"{int(minutes)}:{rest:06.3f}"
+    return (f"本日最快第{lap}圈（{formatted}）的同一物理区段，回场按此比较。"
+            if zh else f"Same physical section of today's best lap {lap} ({formatted}).")
+
+
 def render_next_session(plan, evidence):
     fields = ("location", "why", "action", "keep_fixed", "success", "abort", "review_next")
     if any(not isinstance(plan.get(key), str) or not plan[key].strip() for key in fields):
@@ -38,6 +51,13 @@ def render_next_session(plan, evidence):
         md.insert(4, f"**{label}：** {shape_note}")
         md.insert(5, "")
         body.insert(1, f"<h2>{label}</h2><p>{html.escape(shape_note)}</p>")
+    baseline_note = _baseline_sentence(evidence, zh)
+    if baseline_note:
+        label = "对照基准" if zh else "Baseline"
+        offset = 6 if shape_note else 4
+        md.insert(offset, f"**{label}：** {baseline_note}")
+        md.insert(offset + 1, "")
+        body.insert(2 if shape_note else 1, f"<h2>{label}</h2><p>{html.escape(baseline_note)}</p>")
     locator = _map(evidence, zones, zh) if zones else ""
     local = ""
     if ids[0] in windows:
