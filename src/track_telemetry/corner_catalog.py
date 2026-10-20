@@ -865,6 +865,10 @@ def locate_section(
         query_span = 1.0
     query_stop = query_start + query_span
     pairs: list[tuple[float, dict[str, Any]]] = []
+    # Wide windows only name intervals with a meaningful share of the window, so a
+    # ~25 m sliver at the edge (e.g. T10–T11 touching sector 15) does not pull an
+    # extra corner into the label. Narrow/point queries keep any intersection.
+    min_overlap = 0.01 if 0.02 <= query_span < 1.0 - 1e-9 else 1e-10
     for interval in _section_intervals(ordered):
         left = float(interval["start_progress"])
         right = float(interval["end_progress"])
@@ -875,7 +879,7 @@ def locate_section(
             overlap_start = max(query_start, a)
             overlap = min(query_stop, b) - overlap_start
             contains_point = query_span == 0.0 and a <= query_start <= b
-            if overlap > 1e-10 or contains_point or query_span == 1.0:
+            if overlap > min_overlap or contains_point or query_span == 1.0:
                 pairs.append((overlap_start - query_start, interval))
                 break
     if not pairs:

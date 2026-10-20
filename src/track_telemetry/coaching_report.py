@@ -233,10 +233,14 @@ def render_report(evidence, coaching):
         calculation_details += '</details>'
     bodies.append('<section id="track"><h2>' + tr("计时差出现的位置", "Locate each finding") + '</h2>'
                   + _map(evidence, zones, zh) + '<div class="map-key">'
-                  + "".join(f'<a href="#zone-{z["letter"]}" style="--zone:{z["color"]}">{z["letter"]} · {_escape(z["location"])}</a>' for z in zones)
+                  + "".join(
+                      f'<a href="#zone-{z["letter"]}" style="--zone:{z["color"]}">'
+                      + _escape(f'{z["letter"]} · {z["corner_label"]} · {z["location"]}'
+                                if z.get("corner_label") else f'{z["letter"]} · {z["location"]}')
+                      + '</a>' for z in zones)
                   + '</div><p class="note">' + tr(
-                      "A/B/C 标记计时差出现的区段；动作原因可能在上游弯道。北朝上，箭头表示行驶方向；灰线为行驶轨迹。",
-                      "North up; arrows follow sample order. Highlights locate the findings. Grey lines show recorded routes.") + '</p></section>')
+                      "字母是区段代号，点击直达对应位置；已匹配布局会同时标注官方弯号（如 F · T11–T13），弯号只定位，不代表原因。北朝上，箭头表示行驶方向；灰线为行驶轨迹。",
+                      "Letters index the findings; matched layouts also show official corner names (e.g. F · T11–T13) for location only. North up; arrows follow sample order.") + '</p></section>')
     descriptions = {item["observation_id"]: item for item in coaching.get("sections", [])}
     section_order = {key: index for index, key in enumerate(descriptions)}
     ranked_zones = sorted(zones, key=lambda z: section_order.get(z["observation"]["id"], len(descriptions)))

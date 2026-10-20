@@ -211,11 +211,11 @@ def render_corner(observation, label, zh, *, description=None):
             for minimum_number, minimum in enumerate(_vmins(p), 1):
                 color = "#ba4a20" if index == 0 else "#126d82"
                 x = 60+(minimum["progress"]-lo)/(hi-lo)*670
-                name = ("你" if zh else "You") if index == 0 else ("参考" if zh else "Reference")
-                tx, ty = place_label(x+4, 40+index*18, f'{name} Vmin{minimum_number} {minimum["value"]:.1f}',
+                who = ("你" if zh else "You") if index == 0 else ("参考" if zh else "Reference")
+                tx, ty = place_label(x+4, 40+index*18, f'{who} Vmin{minimum_number} {minimum["value"]:.1f}',
                                      occupied, font=12., bounds=(60., 25., 755., 180.))
                 pieces.append(f'<g class="vmin-marker"><line x1="{x:.1f}" x2="{x:.1f}" y1="25" y2="185" stroke="{color}" stroke-dasharray="5 4"/>'
-                              f'<text x="{tx:.1f}" y="{ty:.1f}" fill="{color}" font-size="12">{name} Vmin{minimum_number} {minimum["value"]:.1f}</text></g>')
+                              f'<text x="{tx:.1f}" y="{ty:.1f}" fill="{color}" font-size="12">{who} Vmin{minimum_number} {minimum["value"]:.1f}</text></g>')
         for p, color in zip(selected, ("#ba4a20", "#126d82")):
             d, previous = [], None
             for time, progress, value in trace(p):
