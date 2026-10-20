@@ -110,6 +110,23 @@ def _map(evidence, zones, zh, selected=None):
     return "".join(pieces)
 
 
+def summarize_deferred(skipped, zh):
+    """Order deferred sectors by size and collapse trivial gaps into one clause."""
+    ordered = sorted(skipped, key=lambda item: item[0], reverse=True)
+    material = [(d, tag) for d, tag in ordered if d >= 0.15][:3]
+    trivial = [(d, tag) for d, tag in ordered if (d, tag) not in material]
+    parts = [tag for _, tag in material]
+    if trivial:
+        largest = max(d for d, _ in trivial)
+        if zh:
+            suffix = "（可忽略）" if largest < 0.15 else ""
+            parts.append(f"其余{len(trivial)}段差均≤{largest:.2f}秒{suffix}")
+        else:
+            suffix = " (ignorable)" if largest < 0.15 else ""
+            parts.append(f"{len(trivial)} more sectors at or below {largest:.2f} s{suffix}")
+    return parts
+
+
 def render_report(evidence, coaching):
     """Build localized, illustrated reports without dumping machine evidence into prose."""
     zh = coaching.get("language", "zh" if re.search(r"[\u4e00-\u9fff]", coaching["summary"]) else "en").startswith("zh")
@@ -195,9 +212,9 @@ def render_report(evidence, coaching):
                 practiced_note.append(
                     f"{zone['letter']}（S{o['sector']:02}）为本节{kind}同位置，不在暂缓列")
             else:
-                skipped.append(
-                    f"{zone['letter']}（S{o['sector']:02}，差约 {difference:.2f} 秒）" if o.get("sector")
-                    else f"{zone['letter']}（差约 {difference:.2f} 秒）")
+                tag = (f"{zone['letter']}（S{o['sector']:02}，差约 {difference:.2f} 秒）" if o.get("sector")
+                       else f"{zone['letter']}（差约 {difference:.2f} 秒）")
+                skipped.append((float(difference or 0.0), tag))
         reference = o.get("section_reference", evidence["reference"])
         driver_label = _session_name(sessions[o["example_session"]], zh) + tr(f"第{o['example_lap']}圈", f" L{o['example_lap']}")
         ref_label = _session_name(sessions[reference["session"]], zh) + tr(f"第{reference['lap']}圈", f" L{reference['lap']}")
@@ -245,13 +262,13 @@ def render_report(evidence, coaching):
         md += ["", tr("说明：" + "、".join(practiced_note) + "。",
                       "Note: " + "、".join(practiced_note) + "."), ""]
     if skipped:
-        names = '、'.join(skipped)
+        names = '、'.join(summarize_deferred(skipped, zh))
         if coaching.get("experiments"):
-            md += ["", tr(f"本节只练最大一项，自拼接机会暂缓{len(skipped)}段：{names}。",
-                          f"Practicing one priority zone; deferred own-lap sectors ({len(skipped)}): {names}."), ""]
+            md += ["", tr(f"本节只练最大一项；自拼接机会暂缓：{names}。",
+                          f"Practicing one priority zone; deferred own-lap sectors: {names}."), ""]
         else:
-            md += ["", tr(f"本节只复测、不立新练习，自拼接机会暂缓{len(skipped)}段：{names}。",
-                          f"Re-measurement only, no new practice; deferred own-lap sectors ({len(skipped)}): {names}."), ""]
+            md += ["", tr(f"本节只复测、不立新练习；自拼接机会暂缓：{names}。",
+                          f"Re-measurement only, no new practice; deferred own-lap sectors: {names}."), ""]
     bodies.append('<section><h2>' + (tr("下一节只做这些练习", "Next-session experiments") if coaching["experiments"]
                                    else tr("先验证原因", "Validate the cause first")) + '</h2>')
     md += ["", "## " + tr("下一节练习", "Next-session experiments"), ""]
