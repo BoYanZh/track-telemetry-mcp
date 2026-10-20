@@ -141,6 +141,12 @@ def render_report(evidence, coaching):
         return "".join(f"<p>{_escape(p)}</p>" for p in text.split("\n\n") if p.strip())
     bodies.append('<header><p class="brand">' + tr("驾驶复盘 · 下一节练习", "Debrief · next-session practice")
                   + f'</p><h1>{_escape(title)}</h1>{paragraphs(coaching["summary"])}</header>')
+    previous = coaching.get("previous_check") or {}
+    previous_text = previous.get("text") if isinstance(previous, dict) else None
+    if isinstance(previous_text, str) and previous_text.strip():
+        bodies.append('<section><h2>' + tr("上次练习回顾", "Last practice check") + '</h2>'
+                      + paragraphs(previous_text) + '</section>')
+        md += ["", "## " + tr("上次练习回顾", "Last practice check"), "", previous_text, ""]
     if evidence.get("external_reference_scan"):
         from .external_report import render_external_scan
 

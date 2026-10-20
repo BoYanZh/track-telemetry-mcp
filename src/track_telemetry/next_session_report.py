@@ -46,11 +46,19 @@ def render_next_session(plan, evidence):
         # The shared renderer includes the same full-track locator and local Vmin route.
         locator = local
     link = "完整报告与对照图" if zh else "Full report and figures"
+    previous = plan.get("previous_check")
+    previous_text = previous.get("text") if isinstance(previous, dict) else None
+    previous_html = ""
+    if isinstance(previous_text, str) and previous_text.strip():
+        label = "上次练习回顾" if zh else "Last practice check"
+        md.append(f"**{label}：** {previous_text}")
+        md.append("")
+        previous_html = f"<h2>{label}</h2><p>{html.escape(previous_text)}</p>"
     md.append(f"[{link}](report.html#{ids[0]})")
     document = ('<!doctype html><html lang="'+('zh-CN' if zh else 'en')+'"><meta charset="utf-8">'
                 '<meta name="viewport" content="width=device-width, initial-scale=1"><title>'+title+'</title>'
                 '<style>body{max-width:820px;margin:32px auto;padding:0 24px;font:18px/1.65 system-ui;background:#f6f7f8;color:#24343d}'
                 'h1{font-size:32px}h2{font-size:18px;margin-bottom:4px}p{margin-top:0}svg{width:100%;background:white}details>svg:first-of-type{max-height:260px}details>svg:nth-of-type(2){max-height:600px}summary{display:none}svg text{font-family:system-ui}'
-                'a{color:#126d82}</style><h1>'+title+'</h1>'+locator+''.join(body)
+                'a{color:#126d82}</style><h1>'+title+'</h1>'+previous_html+locator+''.join(body)
                 +f'<p><a href="report.html#{html.escape(ids[0], quote=True)}">{link}</a></p></html>')
     return "\n".join(md), document
