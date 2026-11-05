@@ -86,7 +86,7 @@ def analyze_mini_sectors(comparisons, reference_result, reference_index, selecti
         if "mini_sectors" not in result:
             continue
         context = selection[item["session"], item["lap"]]
-        explicitly_excluded = context["classification"] in {"traffic", "warmup", "cooldown"}
+        explicitly_excluded = context["classification"] in {"traffic", "warmup", "cooldown", "excluded"}
         flagged = {f["sector"] for f in item["possible_interruption_sectors"]}
         sectors = []
         for sector in result["mini_sectors"]:

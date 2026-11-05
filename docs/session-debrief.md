@@ -37,7 +37,10 @@ all-lap MAD as evidence of improved driving; screening itself truncates spread.
 
 Optional lap_context annotations are an array of objects with session (zero-based
 input index), lap, classification and an external evidence note. Classifications
-are confirmed_push, traffic, warmup, cooldown or unknown. Explicit context overrides
+are confirmed_push, traffic, warmup, cooldown, excluded or unknown. Use excluded
+with an evidence note to omit a lap from coaching and best-sector donors without
+asserting its cause; recorded timing and descriptive comparisons remain visible.
+Explicit context overrides
 pace screening; the reference prefers externally confirmed push laps. Supply the
 array to the MCP tool or use --lap-context context.json in the CLI. Without such
 context, keep push intent and traffic status unconfirmed, even for the fastest lap.

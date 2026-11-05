@@ -34,7 +34,7 @@ from .geometry import latlon_to_xy_m
 from .gg import analyze_gg_usage as gg_metrics
 from .incidents import analyze_incident as incident_metrics
 from .laps import compare_laps as compare_lap_data
-from .laps import fastest_timed_lap, lap_summary, section_metrics
+from .laps import fastest_timed_lap, lap_summary, lap_timing_quality, section_metrics
 from .models import TelemetrySession
 from .motec_adapter import discover_rcz_stints, load_all_rcz_stints
 from .quality import channel_source, measured_source, native_rate
@@ -313,6 +313,7 @@ def _prepare_session_data(session: TelemetrySession) -> dict[str, Any]:
         "fastest_timed_lap_original_number": pb.original_number if pb is not None else None,
         "stints": session.metadata.get("stints", []),
         "timed_lap_numbers": [lap.number for lap in session.laps if lap.is_timed],
+        "lap_timing_quality": lap_timing_quality(session),
         "capabilities": capabilities,
         "recommended_tools": recommended,
         "available_specialized_tools": specialized,
@@ -386,7 +387,7 @@ def _list_sessions_data() -> dict[str, Any]:
 
 @mcp.tool()
 def list_sessions() -> dict[str, Any]:
-    """Discover RCZ, AiM XRK/XRZ, VBOX VBO and RaceChrono CSV without host paths."""
+    """Discover RCZ, MoTeC LD, AiM XRK/XRZ, VBOX VBO and RaceChrono CSV without host paths."""
     return _list_sessions_data()
 
 
@@ -402,6 +403,7 @@ def inspect_session(path: str, stint: int | str = "all") -> dict[str, Any]:
     result = session.to_summary()
     pb = fastest_timed_lap(session)
     result["fastest_timed_lap"] = pb.to_dict() if pb is not None else None
+    result["lap_timing_quality"] = lap_timing_quality(session)
     result["capabilities"] = _session_capabilities(session)
     result["device_summary_by_stint"] = session.metadata.get("device_summary_by_stint", [])
     result["channel_provenance_by_stint"] = session.metadata.get(
@@ -420,7 +422,7 @@ def inspect_session(path: str, stint: int | str = "all") -> dict[str, Any]:
 
 @mcp.tool()
 def prepare_session(path: str, stint: int | str = "all") -> dict[str, Any]:
-    """Prepare all stints in an RCZ recording with global RaceChrono lap numbers.
+    """Summarize a recording's laps, timing warnings and available measurements.
 
     Use stint="all" (default) for the whole day, or stint=N for one recorded run.
     Use after list_sessions when the agent needs a concise PB/lap/capability summary.
@@ -446,6 +448,7 @@ def list_laps(path: str, stint: int | str = "all") -> dict[str, Any]:
         "fastest_timed_lap_stint": pb.stint if pb is not None else None,
         "stints": session.metadata.get("stints", []),
         "laps": [lap.to_dict() for lap in session.laps],
+        "lap_timing_quality": lap_timing_quality(session),
     }
 
 

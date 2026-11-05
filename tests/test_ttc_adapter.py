@@ -1,6 +1,9 @@
 """Synthetic end-to-end text-format decoding and binary adapter contract."""
 
 import datetime
+import importlib
+import shutil
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -8,6 +11,69 @@ import pytest
 from track_telemetry import mcp_server
 from track_telemetry.models import ChannelSeries
 from track_telemetry.ttc_adapter import load_telemetry
+
+
+def test_real_xrk_loads_through_mcp_path(tmp_path, monkeypatch):
+    fixture = Path(__file__).parent / "fixtures" / "aim_sample.xrk"
+    recording = tmp_path / fixture.name
+    shutil.copyfile(fixture, recording)
+    monkeypatch.setenv("TRACK_TELEMETRY_ROOT", str(tmp_path))
+
+    session = mcp_server._load(str(recording))
+
+    assert session.metadata["source_format"] == "AiM XRK"
+    assert {"gps_latitude_deg", "gps_longitude_deg", "speed_kmh"} <= session.channels.keys()
+    assert len(session.laps) > 0
+
+
+def test_aim_missing_converter_has_ttc_install_hint(tmp_path, monkeypatch):
+    original_import = importlib.import_module
+
+    def missing_converter(name, *args, **kwargs):
+        if name == "track_telemetry_converter.channels":
+            raise ModuleNotFoundError("No module named 'track_telemetry_converter'",
+                                      name="track_telemetry_converter")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(importlib, "import_module", missing_converter)
+    recording = tmp_path / "missing-converter.xrk"
+    recording.write_bytes(b"placeholder")
+
+    with pytest.raises(RuntimeError, match=r"pip install -e '\.\[ttc\]'"):
+        load_telemetry(recording)
+
+
+def test_aim_missing_libxrk_has_ttc_install_hint(tmp_path, monkeypatch):
+    original_import = importlib.import_module
+
+    def missing_libxrk(name, *args, **kwargs):
+        if name == "libxrk":
+            raise ModuleNotFoundError("No module named 'libxrk'", name="libxrk")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(importlib, "import_module", missing_libxrk)
+    recording = tmp_path / "missing-libxrk.xrk"
+    recording.write_bytes(b"placeholder")
+
+    with pytest.raises(RuntimeError, match=r"pip install -e '\.\[ttc\]'"):
+        load_telemetry(recording)
+
+
+def test_aim_does_not_hide_internal_import_error(tmp_path, monkeypatch):
+    original_import = importlib.import_module
+
+    def broken_internal_import(name, *args, **kwargs):
+        if name == "track_telemetry_converter.channels":
+            raise ModuleNotFoundError("No module named 'unexpected_dependency'",
+                                      name="unexpected_dependency")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(importlib, "import_module", broken_internal_import)
+    recording = tmp_path / "internal-error.xrk"
+    recording.write_bytes(b"placeholder")
+
+    with pytest.raises(ModuleNotFoundError, match="unexpected_dependency"):
+        load_telemetry(recording)
 
 
 def test_csv_preserves_clock_labels_and_pedal_semantics(tmp_path, capsys):

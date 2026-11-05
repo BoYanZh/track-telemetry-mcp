@@ -25,7 +25,7 @@ Deterministic motorsports telemetry analysis for MCP agents.
 - approximate reference telemetry from calibrated onboard-video overlays
 - agent-oriented capability discovery through `prepare_session`
 - quantitative reference-driver comparison and duration-weighted measured G occupancy
-- TTC adapters for AiM XRK/XRZ, VBOX VBO and RaceChrono CSV, with clock/lap/source semantics
+- TTC adapters for MoTeC LD, AiM XRK/XRZ, VBOX VBO and RaceChrono CSV, with clock/lap/source semantics
 - source-gated braking efficiency, four-wheel speed indications and steering-to-yaw response
 
 Raw logger telemetry and video-derived pseudo telemetry are intentionally kept separate.
@@ -42,12 +42,13 @@ git clone https://github.com/BoYanZh/track-telemetry-mcp.git
 cd track-telemetry-mcp
 
 uv venv
-uv pip install -e ".[dev,rcz,video,viz]"
+uv pip install -e ".[dev,ttc,video,viz]"
 ```
 
 Use only the extras you need:
 
-- `rcz` — RaceChrono decoding through a pinned `track-telemetry-converter` commit
+- `rcz` — RCZ, MoTeC LD, RaceChrono CSV and VBOX VBO decoding through a pinned converter commit
+- `ttc` — all `rcz` formats plus AiM XRK/XRZ through optional `libxrk`
 - `video` — reference-video overlay extraction
 - `dev` — pytest + ruff
 - `viz` — optional headless Matplotlib HTML/PNG telemetry visualization
@@ -160,7 +161,7 @@ Treat video-derived telemetry as approximate pseudo telemetry.
 
 | Tool | Use for | Important constraint |
 |---|---|---|
-| `list_sessions` | discover RCZ recordings and contained stints | returns opaque session IDs, not host paths |
+| `list_sessions` | discover RCZ/LD/XRK/VBO/CSV recordings and contained stints | returns opaque session IDs, not host paths |
 | `prepare_session` | all-stint PB/laps + capability gating | preferred second call |
 | `inspect_session` | detailed metadata, channels, sample rates | use when evidence quality matters |
 | `list_laps` | all-stint lap list including original numbers and stint indices | optional after `prepare_session` |
@@ -314,8 +315,8 @@ Raw `.rcz`, MoTeC files, video, and personal telemetry should not be committed.
 
 ## Current limitations
 
-- local file-backed RCZ/video input only
-- no automatic named-corner database
+- local file-backed telemetry and video input only
+- bundled reviewed corner names cover nine layouts; other layouts remain unmatched
 - different-layout shared-corner matching is still a workflow rule, not an automatic matcher
 - aligned Delta T/V uses lap B as a physical reference path; inadequate GPS agreement fails explicitly
 - section event markers use fixed thresholds, not a vehicle dynamics model; verify against video

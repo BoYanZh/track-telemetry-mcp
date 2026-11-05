@@ -74,6 +74,34 @@ def test_concentrated_loss_is_flagged_not_called_traffic():
     assert "unresolved" in flags[0]["reason"]
 
 
+def test_explicit_exclusion_preserves_evidence_but_removes_coaching_donors(tmp_path):
+    session = _mixed_pace_session()
+    evidence = build_debrief([session], tmp_path, plots=False,
+                             same_layout_confirmed=True, lap_context=[
+        {"session": 0, "lap": 1, "classification": "excluded",
+         "note": "Driver requested exclusion after reviewing the recording"},
+    ])["evidence"]
+    assert evidence["reference"]["lap"] == 2
+    audit = evidence["sessions"][0]["lap_selection"]
+    assert audit[0]["classification"] == "excluded"
+    assert not audit[0]["coaching_eligible"]
+    row = next(row for row in evidence["mini_sector_analysis"]["rows"] if row["lap"] == 1)
+    assert not row["whole_lap_eligible"]
+    assert not any(sector["eligible"] for sector in row["sectors"])
+    assert session.laps[0].kind == "Timed"
+    assert evidence["sessions"][0]["consistency"]["count"] == 4
+    assert evidence["sessions"][0]["lap_timing_quality"]["warnings"]
+    finalize_debrief(tmp_path / "evidence.json", {
+        "summary": "Review excluded laps before coaching.", "hypotheses": [],
+        "experiments": [], "validation_plan": "Confirm the recording with the driver.",
+    })
+    assert "Explicitly excluded from coaching" in (tmp_path / "report.html").read_text(encoding="utf-8")
+    with pytest.raises(ValueError, match="external evidence note"):
+        build_debrief([session], tmp_path, plots=False, lap_context=[
+            {"session": 0, "lap": 1, "classification": "excluded"},
+        ])
+
+
 def test_comparison_and_section_evidence(tmp_path):
     slow, fast = _session(21, warped=True), _session(20)
     result = build_debrief([slow, fast], tmp_path, same_layout_confirmed=True, plots=True)

@@ -382,7 +382,8 @@ def render_report(evidence, coaching):
                        "unclassified_slow": tr("较慢圈，原因未确认", "Unclassified slower lap"),
                        "confirmed_push": tr("已外部确认全力驾驶", "Confirmed push"),
                        "traffic": tr("已标注交通影响", "Traffic annotation"), "warmup": tr("已标注暖胎", "Warmup"),
-                       "cooldown": tr("已标注冷却", "Cooldown")}
+                       "cooldown": tr("已标注冷却", "Cooldown"),
+                       "excluded": tr("已明确排除教练分析", "Explicitly excluded from coaching")}
     for session in sessions.values():
         bodies.append(f'<h3>{_session_name(session, zh)}</h3><p>' + tr("候选圈：", "Candidates: ")
                       + "、".join(str(lap["lap"]) for lap in session["lap_selection"] if lap["coaching_eligible"]) + '</p><ul>')

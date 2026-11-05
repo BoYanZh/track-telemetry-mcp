@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import csv
+import importlib
 import io
 from dataclasses import replace
 from pathlib import Path
@@ -13,7 +14,29 @@ import numpy as np
 from .models import ChannelSeries, Lap, TelemetrySession
 from .motec_adapter import _channel_map, _motec_dependencies, load_all_rcz_stints
 
-SUPPORTED_SUFFIXES = {".rcz", ".xrk", ".xrz", ".vbo", ".csv"}
+SUPPORTED_SUFFIXES = {".rcz", ".xrk", ".xrz", ".vbo", ".csv", ".ld"}
+_XRK_INSTALL_ERROR = (
+    "AiM XRK/XRZ requires track-telemetry-converter with libxrk>=0.13; "
+    "install with: pip install -e '.[ttc]'"
+)
+
+
+def _aim_dependencies():
+    """Load AiM-only dependencies without misreporting them as RCZ support."""
+    try:
+        mc = importlib.import_module("track_telemetry_converter.channels")
+    except ModuleNotFoundError as exc:
+        if exc.name == "track_telemetry_converter":
+            raise RuntimeError(_XRK_INSTALL_ERROR) from exc
+        raise
+    DataLog = importlib.import_module("track_telemetry_converter.log").DataLog
+    try:
+        importlib.import_module("libxrk")
+    except ModuleNotFoundError as exc:
+        if exc.name == "libxrk":
+            raise RuntimeError(_XRK_INSTALL_ERROR) from exc
+        raise
+    return mc, DataLog
 
 
 def _csv_name(name: str) -> str:
@@ -94,7 +117,7 @@ def load_telemetry(path: str | Path) -> TelemetrySession:
         raise FileNotFoundError(source)
     if suffix == ".rcz":
         return load_all_rcz_stints(source)
-    mc, DataLog = _motec_dependencies()
+    mc, DataLog = _aim_dependencies() if suffix in {".xrk", ".xrz"} else _motec_dependencies()
     log = DataLog()
     log.log_file_path = str(source)
     lines = None
@@ -102,12 +125,9 @@ def load_telemetry(path: str | Path) -> TelemetrySession:
     diagnostics = io.StringIO()
     with contextlib.redirect_stdout(diagnostics):
         if suffix in {".xrk", ".xrz"}:
-            try:
-                import libxrk  # noqa: F401
-
-                log.from_xrk_log(str(source))
-            except ImportError as exc:
-                raise RuntimeError("AiM XRK/XRZ requires libxrk>=0.13; install .[ttc]") from exc
+            log.from_xrk_log(str(source))
+        elif suffix == ".ld":
+            log.from_motec_ld_log(str(source))
         else:
             lines = source.read_text(encoding="utf-8-sig").splitlines(keepends=True)
             if suffix == ".vbo":
@@ -125,7 +145,8 @@ def load_telemetry(path: str | Path) -> TelemetrySession:
     metadata = dict(log.metadata or {})
     metadata.update({
         "source_format": {".csv": "RaceChrono CSV", ".vbo": "VBOX VBO",
-                          ".xrk": "AiM XRK", ".xrz": "AiM XRZ"}[suffix],
+                          ".xrk": "AiM XRK", ".xrz": "AiM XRZ",
+                          ".ld": "MoTeC LD"}[suffix],
         "parser": "TrackTelemetryConverter",
         "source_channel_inventory": {name: {"units": ch.units, "samples": len(ch.timestamps)}
                                      for name, ch in log.channels.items()},
@@ -155,6 +176,7 @@ def load_telemetry(path: str | Path) -> TelemetrySession:
             for name, record in detailed.items() if name in {"throttle_pct", "accelerator_pct"}}
     # A CSV name alone is not proof of CAN/IMU origin. Preserve TTC's explicit
     # derived-yaw label, but do not upgrade unknown source to independent yaw.
+    # LD keeps its descriptive motec_ld_recorded_* source labels likewise.
     laps = [Lap(int(raw["lap_num"]), str(raw.get("lap_label", raw["lap_num"])),
                 str(raw.get("type", "Unknown")), float(raw["start_time"]),
                 float(raw["end_time"]), float(raw["duration"]),
@@ -178,6 +200,29 @@ def load_telemetry(path: str | Path) -> TelemetrySession:
                     metadata["channel_sources"][channel.name] = "unknown"
     elif suffix == ".vbo":
         metadata["lap_timing_semantics"] = "No lap boundaries provided by TTC VBO parser; no timed laps inferred"
+    elif suffix == ".ld":
+        # Keep the converter's lap_timing_semantics (lap-number transitions /
+        # GPS beacons / single out lap). Translate LD series rates to
+        # normalized names: LD channels are file-direct logger rates, so the
+        # series Hz is truthful native evidence (unlike RCZ resampling).
+        # Sources stay "unknown": rate gates may pass, measured-source gates
+        # (G/yaw verification) correctly stay closed.
+        series_rates = log.metadata.get("native_sample_rate_hz", {}) or {}
+        metadata["native_sample_rate_hz"] = {
+            name: float(series_rates[raw])
+            for raw, name in _channel_map(mc).items()
+            if raw in series_rates and name in normalized
+        }
+        raw_provenance = log.metadata.get("channel_provenance", {}) or {}
+        metadata["normalized_channel_provenance"] = {
+            name: dict(raw_provenance[raw])
+            for raw, name in _channel_map(mc).items()
+            if raw in raw_provenance and name in normalized
+        }
+        metadata["control_semantics"] = {
+            name: "unverified" for name in ("throttle_pct", "accelerator_pct")
+            if name in normalized
+        }
     else:
         metadata["lap_timing_semantics"] = "AiM logger lap table on shared channel clock"
     return TelemetrySession(source.stem, str(source), metadata, laps, normalized)

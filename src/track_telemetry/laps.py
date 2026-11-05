@@ -26,8 +26,40 @@ from .models import Lap, TelemetrySession
 
 
 def fastest_timed_lap(session: TelemetrySession) -> Lap | None:
-    timed = [lap for lap in session.laps if lap.is_timed and np.isfinite(lap.duration_s)]
+    timed = [lap for lap in session.laps
+             if lap.is_timed and np.isfinite(lap.duration_s) and lap.duration_s > 0]
     return min(timed, key=lambda lap: lap.duration_s) if timed else None
+
+
+def lap_timing_quality(session: TelemetrySession) -> dict[str, Any]:
+    """Flag timing anomalies without inferring driver intent or changing lap types."""
+    timed = [lap for lap in session.laps if lap.is_timed]
+    durations = [lap.duration_s for lap in timed
+                 if np.isfinite(lap.duration_s) and lap.duration_s > 0]
+    median = float(np.median(durations)) if len(durations) >= 3 else None
+    threshold = median * 1.5 if median is not None else None
+    warnings = []
+    for lap in timed:
+        invalid = not np.isfinite(lap.duration_s) or lap.duration_s <= 0
+        if invalid or (threshold is not None and lap.duration_s > threshold):
+            warnings.append({
+                "lap_number": lap.number,
+                "stint": lap.stint,
+                "reason": "invalid_duration" if invalid else "unusually_long_timed_lap",
+                "duration_s": float(lap.duration_s) if np.isfinite(lap.duration_s) else None,
+            })
+    return {
+        "warnings": warnings,
+        "median_timed_duration_s": median,
+        "long_lap_threshold_s": threshold,
+        "note": (
+            "Long-lap screening requires at least three finite positive timed laps and uses "
+            "1.5 times their median duration. Warnings do not infer out/in laps, traffic or "
+            "driver intent, and do not automatically exclude laps. For coaching exclusion, "
+            "supply lap_context classification='excluded' with an external evidence note "
+            "to analyze_session_debrief."
+        ),
+    }
 
 
 def _lap_gps_progress(

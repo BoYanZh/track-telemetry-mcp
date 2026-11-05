@@ -12,7 +12,7 @@ from .alignment import align_laps
 from .braking import analyze_braking
 from .channels import GPS_LATITUDE_DEG
 from .gg import analyze_gg_usage
-from .laps import _lap_gps_progress, lap_summary, section_metrics
+from .laps import _lap_gps_progress, lap_summary, lap_timing_quality, section_metrics
 from .motec_adapter import load_all_rcz_stints
 from .quality import channel_source, native_rate
 from .reference import compare_reference_laps
@@ -151,7 +151,7 @@ def _physical_section(session, number, profile, label):
 
 def _lap_selection(sessions, lap_context):
     """Separate pace candidates from intent confirmed by external annotations."""
-    allowed = {"confirmed_push", "traffic", "warmup", "cooldown", "unknown"}
+    allowed = {"confirmed_push", "traffic", "warmup", "cooldown", "excluded", "unknown"}
     annotations = {}
     for item in lap_context or []:
         key = (item["session"], item["lap"])
@@ -170,7 +170,7 @@ def _lap_selection(sessions, lap_context):
     for index, session in enumerate(sessions):
         timed = [lap for lap in session.laps if lap.is_timed
                  and np.isfinite(lap.duration_s) and lap.duration_s > 0]
-        known_exclusions = {"traffic", "warmup", "cooldown"}
+        known_exclusions = {"traffic", "warmup", "cooldown", "excluded"}
         pool = [lap for lap in timed if annotations.get((index, lap.number), {}).get(
             "classification") not in known_exclusions]
         best = min((lap.duration_s for lap in pool), default=None)
@@ -233,6 +233,7 @@ def build_debrief(sessions, output_dir: Path, *, same_layout_confirmed=False, pl
         candidates.extend((index, lap) for lap in laps)
         evidence["sessions"].append({
             "index": index, "summary": session.to_summary(),
+            "lap_timing_quality": lap_timing_quality(session),
             "lap_summaries": [lap_summary(session, lap.number) for lap in laps],
             "excluded_laps": [lap.to_dict() for lap in session.laps if lap not in laps],
             "consistency": _consistency(laps),

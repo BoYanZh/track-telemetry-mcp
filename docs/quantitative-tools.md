@@ -25,9 +25,11 @@ Sensor mounting, axis signs, grade and banking remain interpretation limits.
 
 ## TTC inputs
 
-Install `.[rcz]` for RCZ, RaceChrono CSV and VBOX VBO, or `.[ttc]` to also
-install libxrk for AiM XRK/XRZ. Discovery and path-based tools accept these
-extensions. This is a supported subset, not full TTC format parity.
+Install with `pip install -e ".[rcz]"` for RCZ, MoTeC LD, RaceChrono CSV and
+VBOX VBO, or `pip install -e ".[ttc]"` to also install libxrk for AiM XRK/XRZ.
+LD uses the converter's bundled parser and needs no dependency beyond `rcz`.
+Discovery and path-based tools accept these extensions.
+This is a supported subset, not full TTC format parity.
 
 Sessions report source format, parser diagnostics, source channel inventory,
 recording datetime with timezone limitations, and clock semantics. Timestamps
@@ -35,7 +37,17 @@ retain their common TTC clock; channels are never rebased individually.
 Wheel speeds map to `wheel_fl/fr/rl/rr_kmh`.
 
 RCZ retains original lap IDs, stints and recorder epoch. AiM retains logger
-lap IDs and shared-clock boundaries. CSV uses recorded beacon boundaries when
+lap IDs and shared-clock boundaries. MoTeC LD uses recorded lap-number
+transitions when the lap channel is near-integer (resample-interpolated
+drift is detected and discarded in favor of GPS beacons); otherwise GPS
+start/finish beacons bound the laps, and files with neither get a single
+Out Lap. Segments over 10 minutes stay Partial, never Timed, so pit/red-flag
+time in multi-fragment logger files cannot poison the timed set. LD channel
+sources are descriptive (`motec_ld_recorded_*`), never CAN/IMU, so
+source-gated tools (slip, incident, G occupancy, braking efficiency, wheel
+speeds, steering response) stay closed while lap/section/compare/braking
+and P1 plots work. GPS bearing is synthesized from course only when the
+file records no heading, and is labeled synthetic. CSV uses recorded beacon boundaries when
 present, preserving TTC's lap types without inventing original source lap IDs.
 Without beacons, CSV preserves original labels separately
 from unique selection IDs, bounds interior laps by label transitions, and marks
@@ -45,12 +57,27 @@ CSV without labels and VBO without TTC lap metadata have no timed laps.
 CSV accelerator_pos/PPS remains pedal position. Ambiguous mixed pedal/body
 exports are rejected. Non-RCZ names alone do not prove independent CAN/IMU
 measurements. Unknown provenance remains unknown, so source-sensitive tools
-can be unavailable after parsing. Automated binary adapter dispatch/clock tests
-use synthetic TTC results. A separate local smoke check with TTC's public
-`aim_sample.xrk` and its zlib-compressed XRZ copy verified identical normalized
-channel values, timestamps and 11 laps using libxrk 0.13.0. No private recording
-is needed or included. The normalized sample preserves GPS start at 0.068 s
-versus RPM at 0 s, speed conversion and recording datetime.
+can be unavailable after parsing. Tests cover synthetic adapter contracts and
+real binary parsing through the MCP loader using the public `aim_sample.xrk`
+fixture. CI installs `ttc` to exercise that path. No private recording is needed.
+
+## Lap timing warnings and exclusions
+
+`prepare_session`, `inspect_session`, `list_laps` and debrief session evidence
+include `lap_timing_quality`. Invalid timed durations are flagged and cannot be
+selected as a PB. With at least three finite positive timed laps, durations above
+1.5 times their median are flagged as unusually long. This is a timing screen,
+not proof of an out/in lap, traffic or driver intent. Warnings do not relabel or
+automatically exclude laps; a session dominated by slow laps may not trigger it.
+
+To exclude a known lap from coaching without inventing its cause, pass
+`lap_context=[{"session": 0, "lap": 1, "classification": "excluded",
+"note": "Driver requested exclusion after reviewing the recording"}]` to
+`analyze_session_debrief`. Session indices are zero-based and lap IDs are those
+returned by the tools. An external evidence note is required. Excluded laps
+remain in recorded summaries, timing spread and descriptive comparisons, but
+cannot supply the coaching reference or best mini-sectors. Exclusion applies
+to that debrief call; direct tools still analyze explicitly requested lap IDs.
 
 ## Vehicle response measurements
 
