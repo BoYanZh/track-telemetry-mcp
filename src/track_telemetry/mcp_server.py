@@ -686,7 +686,7 @@ def render_lap_comparison(
     same_layout_confirmed: bool = False,
     plots: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Write P1 static GPS, Speed-vs-Distance and Delta-T comparison figures.
+    """Write P1 GPS, speed, Delta-T, sector delta and speed minima figures.
 
     Requires the same physical circuit layout and successful physical GPS
     alignment. Outputs a portable HTML report and individual PNG files.

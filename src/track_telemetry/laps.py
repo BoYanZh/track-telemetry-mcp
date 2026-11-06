@@ -315,6 +315,28 @@ def section_metrics(
     return result
 
 
+def comparison_sectors(aligned: dict[str, Any], count: int = 20) -> list[dict[str, Any]]:
+    """Measure equal-distance sectors on the aligned reference lap."""
+    grid = aligned["distance_m"]
+    length = float(grid[-1])
+    edges = np.linspace(0.0, length, count + 1)
+    sector_a = np.diff(np.interp(edges, grid, aligned["elapsed_a_s"]))
+    sector_b = np.diff(np.interp(edges, grid, aligned["elapsed_b_s"]))
+    return [
+        {
+            "sector": i + 1,
+            "start_distance_m": float(edges[i]),
+            "end_distance_m": float(edges[i + 1]),
+            "start_progress": float(edges[i] / length),
+            "end_progress": float(edges[i + 1] / length),
+            "lap_a_s": float(sector_a[i]),
+            "lap_b_s": float(sector_b[i]),
+            "a_minus_b_s": float(sector_a[i] - sector_b[i]),
+        }
+        for i in range(count)
+    ]
+
+
 def compare_laps(
     session_a: TelemetrySession,
     lap_a_number: int,
@@ -353,24 +375,6 @@ def compare_laps(
     )
     grid = aligned["distance_m"]
     length = float(grid[-1])
-    edges = np.linspace(0.0, length, mini_sectors + 1)
-    elapsed_a = np.interp(edges, grid, aligned["elapsed_a_s"])
-    elapsed_b = np.interp(edges, grid, aligned["elapsed_b_s"])
-    sector_a = np.diff(elapsed_a)
-    sector_b = np.diff(elapsed_b)
-
-    sectors = []
-    for i in range(mini_sectors):
-        sectors.append(
-            {
-                "sector": i + 1,
-                "start_progress": float(edges[i] / length),
-                "end_progress": float(edges[i + 1] / length),
-                "lap_a_s": float(sector_a[i]),
-                "lap_b_s": float(sector_b[i]),
-                "a_minus_b_s": float(sector_a[i] - sector_b[i]),
-            }
-        )
 
     result: dict[str, Any] = {
         "lap_a": lap_a.to_dict(),
@@ -378,7 +382,7 @@ def compare_laps(
         "lap_a_minus_b_total_s": float(lap_a.duration_s - lap_b.duration_s),
         "gps_distance_m": aligned["gps_path_length_m"],
         "alignment_quality": aligned["alignment_quality"],
-        "mini_sectors": sectors,
+        "mini_sectors": comparison_sectors(aligned, mini_sectors),
     }
     if include_profile:
         target = np.linspace(0.0, length, profile_points)

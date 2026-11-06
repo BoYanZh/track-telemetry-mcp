@@ -64,6 +64,10 @@ def test_reference_alignment_follows_physical_position_not_time_fraction() -> No
     profile = result["profile"]
     assert result["lap_a_minus_b_total_s"] == pytest.approx(1.0)
     assert sum(s["a_minus_b_s"] for s in result["mini_sectors"]) == pytest.approx(1.0)
+    sectors = result["mini_sectors"]
+    edges = np.linspace(0.0, result["gps_distance_m"]["lap_b"], 11)
+    np.testing.assert_allclose([s["start_distance_m"] for s in sectors], edges[:-1])
+    np.testing.assert_allclose([s["end_distance_m"] for s in sectors], edges[1:])
     assert profile[0]["delta_t_s"] == pytest.approx(0)
     assert profile[-1]["delta_t_s"] == pytest.approx(1)
     # The relevant comparison must be at the physical midpoint, not 50% elapsed time.

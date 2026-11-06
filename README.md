@@ -170,7 +170,7 @@ Treat video-derived telemetry as approximate pseudo telemetry.
 | `locate_track_corners` | GPS layout identification and official corner locations for a lap | shape, direction and branch gates; ambiguity stays unresolved |
 | `analyze_section` | entry/minimum/exit + braking/steering/power event timeline | normalized distance within one layout; threshold-based timing |
 | `compare_laps` | physical-position-aligned mini-sectors; optional sampled Delta T/V profile | same physical layout must be confirmed; GPS alignment must pass quality guards |
-| `render_lap_comparison` | P1 GPS trajectory overlay, speed vs reference distance, cumulative Delta T | requires same layout, GPS alignment and `viz` dependency; outputs HTML + PNG |
+| `render_lap_comparison` | P1 GPS trajectory, speed vs reference distance, cumulative Delta T, sector deltas and speed minima | requires same layout, GPS alignment and `viz` dependency; outputs HTML + PNG |
 | `render_session_report` | P2 G-G/G traces, driver inputs, vehicle health for one timed lap | channel- and rate-gated; missing channels skipped |
 | `analyze_braking` | deceleration and brake events | does not infer ABS from pressure alone |
 | `analyze_slip_angle` | rotation / vehicle-sideslip proxy | independent yaw source required |
@@ -201,7 +201,7 @@ Use a file path under `TRACK_TELEMETRY_ROOT` (or a `session_id` from
 render_lap_comparison(
     path_a="day1.rcz", lap_a=14, path_b="day2.rcz", lap_b=22,
     same_layout_confirmed=True, output_html="reports/fast-laps.html",
-    plots=["gps_trace", "speed_distance", "delta_time"],
+    plots=["gps_trace", "speed_distance", "delta_time", "sector_delta", "speed_minima"],
 )
 render_session_report(
     path="day2.rcz", lap_number=22,
@@ -212,7 +212,9 @@ render_session_report(
 
 Each tool returns `output_html`, `plot_files`, `generated_plots`,
 `skipped_plots`, `notes` and per-channel samples, rate, and lap coverage.
-P1 comparison includes GPS alignment quality. Speed and Delta-T use physical
+P1 comparison includes GPS alignment quality and mini-sector boundaries in
+meters along lap B's reference trace. The speed minima chart uses the aligned
+speed profiles within those sectors. Speed and Delta-T use physical
 reference-distance interpolation only; plot grid size is **not** source sample
 rate. Raw GPS sample points are visible when sparse. P2 G-G requires paired
 longitudinal and lateral G channels sampled at least 5 Hz, while other P2

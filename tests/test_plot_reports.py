@@ -92,16 +92,32 @@ def _verify_png_files(result: dict) -> None:
         assert Path(path).read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
 
 
-def test_p1_generates_three_real_figures_and_honest_delta(tmp_path: Path) -> None:
+def test_p1_generates_figures_and_honest_delta(tmp_path: Path) -> None:
     a = _session(21, warped=True, radius=102)
     b = _session(20)
     result = render_lap_comparison(
         a, 1, b, 1, tmp_path / "comparison.html",
         same_layout_confirmed=True,
     )
-    assert result["generated_plots"] == ["gps_trace", "speed_distance", "delta_time"]
+    assert result["generated_plots"] == [
+        "gps_trace", "speed_distance", "delta_time", "sector_delta", "speed_minima",
+    ]
+    assert len(result["mini_sectors"]) == 20
+    assert sum(s["a_minus_b_s"] for s in result["mini_sectors"]) == pytest.approx(1)
     assert result["lap_a_minus_b_total_s"] == pytest.approx(1)
     assert result["alignment_quality"]["p95_lateral_deviation_m"] < 5
+    _verify_png_files(result)
+
+
+def test_p1_speed_minima_requires_speed_coverage_on_both_laps(tmp_path: Path) -> None:
+    a = _session()
+    del a.channels[SPEED_KMH]
+    result = render_lap_comparison(
+        a, 1, _session(), 1, tmp_path / "no-speed.html",
+        same_layout_confirmed=True, plots=["sector_delta", "speed_minima"],
+    )
+    assert result["generated_plots"] == ["sector_delta"]
+    assert "speed_minima" in result["skipped_plots"]
     _verify_png_files(result)
 
 

@@ -34,9 +34,10 @@ from .channels import (
     VERT_G,
 )
 from .geometry import latlon_to_xy_m
+from .laps import comparison_sectors
 from .models import Lap, TelemetrySession
 
-COMPARISON_PLOTS = ("gps_trace", "speed_distance", "delta_time")
+COMPARISON_PLOTS = ("gps_trace", "speed_distance", "delta_time", "sector_delta", "speed_minima")
 SESSION_PLOTS = ("gg_diagram", "g_traces", "driver_inputs", "vehicle_health")
 
 _CONTROL_CHANNELS = (
@@ -277,7 +278,7 @@ def render_lap_comparison(
     same_layout_confirmed: bool,
     plots: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Render GPS geometry + distance-aligned speed and delta-T (P1)."""
+    """Render GPS geometry and aligned lap and mini-sector comparisons (P1)."""
     chosen = _select_plots(plots, COMPARISON_PLOTS)
     if not same_layout_confirmed:
         raise ValueError("Lap comparison requires same_layout_confirmed=True")
@@ -293,6 +294,7 @@ def render_lap_comparison(
         "lap_b": _channel_info(session_b, lap_b, required_names),
     }
     all_figures: list[tuple[str, Any]] = []
+    skipped: dict[str, str] = {}
     note = [
         "GPS lines show sampled trajectories, not track boundaries or verified official corner positions.",
         "Speed and Delta T use physical GPS-position alignment; interpolation adds no measured samples.",
@@ -359,14 +361,46 @@ def render_lap_comparison(
         ax.set(xlabel="Reference lap B distance (m)", ylabel="A − B elapsed time (s)", title="Cumulative lap delta")
         ax.grid(alpha=0.3)
         all_figures.append(("delta_time", fig))
+    sectors = comparison_sectors(aligned)
+    if "sector_delta" in chosen:
+        fig = _figure()
+        ax = fig.subplots()
+        ax.bar([s["sector"] for s in sectors], [s["a_minus_b_s"] for s in sectors])
+        ax.axhline(0, color="gray", linewidth=0.9)
+        ax.set(xlabel="Mini-sector", ylabel="A − B sector time (s)", title="Time delta by mini-sector")
+        all_figures.append(("sector_delta", fig))
+    if "speed_minima" in chosen:
+        minima = []
+        for name in ("speed_a_kmh", "speed_b_kmh"):
+            speeds = aligned[name]
+            series = []
+            for sector in sectors:
+                start, end = sector["start_distance_m"], sector["end_distance_m"]
+                inside = (distance > start) & (distance < end)
+                samples = np.r_[np.interp([start, end], distance, speeds), speeds[inside]]
+                series.append(float(np.min(samples)) if np.all(np.isfinite(samples)) else np.nan)
+            minima.append(np.asarray(series))
+        if np.any(np.isfinite(minima[0]) & np.isfinite(minima[1])):
+            fig = _figure()
+            ax = fig.subplots()
+            numbers = np.asarray([s["sector"] for s in sectors])
+            ax.bar(numbers - 0.18, minima[0], width=0.36, label=label_a)
+            ax.bar(numbers + 0.18, minima[1], width=0.36, label=label_b)
+            ax.set(xlabel="Mini-sector", ylabel="Minimum speed (km/h)", title="Aligned speed minima by mini-sector")
+            ax.legend(fontsize=8)
+            all_figures.append(("speed_minima", fig))
+            note.append("Speed minima are taken from the aligned speed profile in each mini-sector.")
+        else:
+            skipped["speed_minima"] = "No mini-sector has aligned speed coverage for both laps"
     result = _save_report(
         output_html, f"Lap comparison: {label_a} vs {label_b}",
-        all_figures, skipped={}, notes=note, channel_quality=quality_by_lap,
+        all_figures, skipped=skipped, notes=note, channel_quality=quality_by_lap,
     )
     result["alignment_quality"] = quality
     result["lap_a"] = lap_a.to_dict()
     result["lap_b"] = lap_b.to_dict()
     result["lap_a_minus_b_total_s"] = lap_a.duration_s - lap_b.duration_s
+    result["mini_sectors"] = sectors
     return result
 
 
