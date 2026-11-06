@@ -220,6 +220,7 @@ rate. Raw GPS sample points are visible when sparse. P2 G-G requires paired
 longitudinal and lateral G channels sampled at least 5 Hz, while other P2
 plots include only recorded channels with sufficient lap coverage. Source
 metadata should be checked before using derived G to infer physical grip.
+Comparison rejects a projected start or finish coverage gap over 25 m.
 No chart fills missing data with assumed zeros or bridges different stints.
 
 G-G plots use physically equal X/Y scales and symmetric limits rounded up

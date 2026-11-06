@@ -79,11 +79,18 @@ def _project_to_reference(
     regressions = np.diff(projected)
     if np.any(regressions < -max(10.0, max_lateral_deviation_m)):
         raise ValueError("GPS alignment jumps backwards; possible wrong layout or track crossing")
-    projected = np.maximum.accumulate(projected)
     ref_length = float(ref_s[-1])
-    endpoint_tolerance = max(25.0, 0.015 * ref_length)
-    if projected[0] > endpoint_tolerance or ref_length - projected[-1] > endpoint_tolerance:
-        raise ValueError("GPS trace does not cover both lap timing boundaries")
+    # Timing anchors must be near the same physical points regardless of lap length.
+    start_gap = float(projected[0])
+    end_gap = ref_length - float(projected[-1])
+    endpoint_tolerance_m = 25.0
+    if max(start_gap, end_gap) > endpoint_tolerance_m:
+        raise ValueError(
+            "GPS trace does not cover both lap timing boundaries "
+            f"(start gap {start_gap:.1f} m, end gap {end_gap:.1f} m, "
+            f"limit {endpoint_tolerance_m:.0f} m)"
+        )
+    projected = np.maximum.accumulate(projected)
 
     return projected, {
         "method": "time-gated-nearest-reference-segment",
