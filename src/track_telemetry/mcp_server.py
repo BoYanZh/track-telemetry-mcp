@@ -685,6 +685,8 @@ def render_lap_comparison(
     output_html: str,
     same_layout_confirmed: bool = False,
     plots: list[str] | None = None,
+    basemap: str | None = None,
+    basemap_width_m: float | None = None,
 ) -> dict[str, Any]:
     """Write P1 GPS, speed, Delta-T, sector delta and speed minima figures.
 
@@ -692,14 +694,26 @@ def render_lap_comparison(
     alignment. Outputs a portable HTML report and individual PNG files.
     Matplotlib requires the optional 'viz' dependency. Low-frequency GPS
     and alignment uncertainty are labeled, never disguised as extra samples.
+    Set basemap="osm" for a faint OSM background in gps_trace only (visual
+    reference, never a surveyed boundary), "catalog:<layout_id>" for an
+    owner-reviewed local track trace, or a GeoJSON file path inside
+    TRACK_TELEMETRY_ROOT; failures downgrade the background only.
     """
     session_a = _load(path_a)
     session_b = _load(path_b)
+    resolved_basemap: str | Path | None = None
+    if basemap is not None:
+        if basemap == "osm":
+            resolved_basemap = "osm"
+        else:
+            resolved_basemap = _resolve_existing(basemap, {".json", ".geojson"})
     return comparison_figures(
         session_a, lap_a, session_b, lap_b,
         _resolve_output(output_html, ".html"),
         same_layout_confirmed=same_layout_confirmed,
         plots=plots,
+        basemap=resolved_basemap,
+        basemap_width_m=basemap_width_m,
     )
 
 

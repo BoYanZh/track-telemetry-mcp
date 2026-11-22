@@ -277,8 +277,15 @@ def render_lap_comparison(
     *,
     same_layout_confirmed: bool,
     plots: list[str] | None = None,
+    basemap: str | Path | dict[str, Any] | None = None,
+    basemap_width_m: float | None = None,
 ) -> dict[str, Any]:
-    """Render GPS geometry and aligned lap and mini-sector comparisons (P1)."""
+    """Render GPS geometry and aligned lap and mini-sector comparisons (P1).
+
+    ``basemap`` is a faint visual reference only (None, "osm", a GeoJSON path,
+    or an inline {"features": [...]} mapping). It never enters measurement and
+    a fetch/parse failure only downgrades the background, never the trajectories.
+    """
     chosen = _select_plots(plots, COMPARISON_PLOTS)
     if not same_layout_confirmed:
         raise ValueError("Lap comparison requires same_layout_confirmed=True")
@@ -314,6 +321,7 @@ def render_lap_comparison(
 
     label_a = f"A: {session_a.session_id} L{lap_a.number}"
     label_b = f"B: {session_b.session_id} L{lap_b.number}"
+    basemap_result: dict[str, Any] = {"status": "disabled"}
     if "gps_trace" in chosen:
         origin_ch = session_b.channel(GPS_LATITUDE_DEG)
         valid = np.isfinite(origin_ch.values)
@@ -326,8 +334,45 @@ def render_lap_comparison(
         _, xb, yb = _gps_xy(session_b, lap_b, lat0, lon0)
         fig = _figure(height=6.5)
         ax = fig.subplots()
-        ax.plot(xa, ya, linewidth=1.6, label=label_a)
-        ax.plot(xb, yb, linewidth=1.6, label=label_b)
+        if basemap is not None:
+            from .basemap import resolve_basemap
+
+            lat_mask = (origin_ch.timestamps >= lap_b.start_s) & (origin_ch.timestamps <= lap_b.end_s)
+            lap_lat = origin_ch.values[lat_mask]
+            lap_lon = lon_ch.interp(origin_ch.timestamps[lat_mask])
+            cache_dir = output_html.parent / ".basemap_cache" if basemap == "osm" else None
+            basemap_result = resolve_basemap(
+                basemap, lat0, lon0, lap_lat, lap_lon,
+                width_override_m=basemap_width_m, cache_dir=cache_dir,
+            )
+            if basemap_result["status"] == "ok":
+                from matplotlib.patches import Polygon as _MplPolygon
+
+                legend_label = f"{basemap_result['label']} (reference only)"
+                for index, poly in enumerate(basemap_result["polygons_xy"]):
+                    ax.add_patch(_MplPolygon(
+                        np.asarray(poly), closed=True, facecolor="#cbd5e1",
+                        edgecolor="#94a3b8", linewidth=0.8, alpha=0.35, zorder=1,
+                        label=legend_label if index == 0 else None,
+                    ))
+                for line in basemap_result["lines_xy"]:
+                    ax.plot(np.asarray(line)[:, 0], np.asarray(line)[:, 1],
+                            color="#94a3b8", linewidth=1.0, linestyle=(0, (4, 4)),
+                            alpha=0.7, zorder=1)
+                attribution = basemap_result["attribution"]
+                note.append(
+                    f"Faint {basemap_result['label']} is a visual reference only, "
+                    "not a surveyed track boundary; do not use it for off-track "
+                    f"measurement.{f' {attribution}.' if attribution else ''}"
+                )
+            else:
+                note.append(
+                    f"{basemap_result.get('label', 'Basemap')} unavailable "
+                    f"({basemap_result.get('reason', 'unknown reason')}); "
+                    "trajectories remain measured GPS."
+                )
+        ax.plot(xa, ya, linewidth=1.6, label=label_a, zorder=3)
+        ax.plot(xb, yb, linewidth=1.6, label=label_b, zorder=3)
         ax.scatter([xb[0]], [yb[0]], marker="o", s=46, label="First recorded B GPS fix")
         if gps_rates and min(gps_rates) < 5:
             ax.scatter(xa, ya, s=5, alpha=0.2)
@@ -401,6 +446,16 @@ def render_lap_comparison(
     result["lap_b"] = lap_b.to_dict()
     result["lap_a_minus_b_total_s"] = lap_a.duration_s - lap_b.duration_s
     result["mini_sectors"] = sectors
+    result["basemap"] = (
+        {k: v for k, v in basemap_result.items() if k != "polygons_xy" and v is not None}
+        if "gps_trace" in chosen else {"status": "disabled"}
+    )
+    if isinstance(result["basemap"].get("provenance"), dict):
+        result["basemap"]["provenance"] = {
+            k: v for k, v in result["basemap"]["provenance"].items()
+        }
+    # Keep large arrays out of the JSON-safe summary; drop line coords too.
+    result["basemap"].pop("lines_xy", None)
     return result
 
 
